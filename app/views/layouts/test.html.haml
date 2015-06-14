@@ -1,0 +1,16 @@
+!!!
+/[if lt IE 7] <html class="no-js lt-ie9 lt-ie8 lt-ie7">
+/[if IE 7] <html class="no-js lt-ie9 lt-ie8">
+/[if IE 8] <html class="no-js lt-ie9">
+/ [if gt IE 8]><!
+%html
+  / <![endif]
+  %head
+    %title VoyageX Test
+    = render partial: 'layouts/init_js'
+    = csrf_meta_tags
+    = javascript_include_tag "modernizr"
+    = javascript_include_tag "preload"
+    = javascript_include_tag "comm/storage_controller.js"
+  %body
+    = yield

@@ -1,0 +1,50 @@
+<% if Rails.env.to_sym == :test %>
+
+class window.Comm.MockInit
+
+  constructor: () ->
+    window.console = new Comm.ConsoleMock()
+    $(document).ready () ->
+      $('body').first().append('<div id="test_out"></div>')
+      MOCK.out 'Modernizr.localstorage = '+Modernizr.localstorage
+      MOCK.out 'Modernizr.filereader = '+Modernizr.filereader
+      MOCK.out 'Modernizr.filesystem = '+Modernizr.filesystem
+      MOCK.out 'Modernizr.fileinput = '+Modernizr.fileinput
+      try
+        fileAPISupport = `navigator.webkitPersistentStorage !== undefined`
+      catch error
+        fileAPISupport = false
+      MOCK.out 'fileAPISupport = '+fileAPISupport
+      APP._init APP.view(), MockInit._mapOptions(), [4,8,12,16], VoyageX.TILE_HANDLER
+    window.VoyageX.TILE_HANDLER = new L.TileLayer.Functional(MockInit.drawTile, {
+            subdomains: ['a']
+          })
+
+  out: (message) ->
+    $('#test_out').append('\n<m>'+message+'</m>')
+
+  @_mapOptions: () ->
+    zooms = [<%=(1..16).collect{|n|",#{n}"}.join.sub(/^,/,'')%>]
+    { center: new L.LatLng(<%=Location.default.latitude%>, <%=Location.default.longitude%>),\
+      zooms: zooms,\
+      zoom: 16,\
+      subdomains: ['a'],\
+      access_token: 'pk.eyJ1Ijoic3RlcGhhbmtvZWxsZXIiLCJhIjoiZEFHdnhwayJ9.AdtZiG5HGi5JAb64G1K-jA',\
+      max_zoom: 30 }
+
+  @drawTile: (view) ->
+    tileKey = Comm.StorageController.tileKey([view.tile.column, view.tile.row, view.zoom])
+    MOCK.out 'MockInit-drawTile: '+tileKey
+    #VoyageX.Main.mapControl().drawTile view
+    '/test/tile_256x256.png'
+
+
+class window.Comm.ConsoleMock
+
+  log: (message) ->
+    MOCK.out message
+
+
+window.MOCK = new Comm.MockInit()
+
+<% end %>

@@ -1,0 +1,1347 @@
+//= require storage/file_utils
+
+if window.Comm?
+  window.Comm.StorageController = {}
+else
+  window.Comm = { StorageController: {} }
+
+# window.open("data:text/json," + JSON.stringify(APP.storage().getUser(264)), "_v_x_json")
+class window.Comm.StorageController
+
+  @_SINGLETON = null
+  #@_FS = null
+
+  constructor: (initLocation, fsInitCB) ->
+    unless Modernizr.localstorage
+      alert('This Browser Doesn\'t Support Local Storage.')
+    if StorageController._SINGLETON != null
+      alert('ERROR: StorageController is Singleton')
+      return null
+    StorageController._SINGLETON = this
+    # volatileFlags are kept until next reload from server (reloading form app-cache doesn't reset values)
+    storeKey = 'comm.env'
+    env = JSON.parse(localStorage.getItem(storeKey))
+    if env?
+      env.localInitTS = Math.round(new Date().getTime()/1000)
+      if initSystemTimeStamp > env.sysInitTS
+        env.sysInitTS = initSystemTimeStamp
+        env.volatileFlags = {}
+    else
+      env = { sysInitTS: initSystemTimeStamp, localInitTS: Math.round(new Date().getTime()/1000), volatileFlags: {} }
+    localStorage.setItem storeKey, JSON.stringify(env)
+    this.saveLocation initLocation
+    @_maxNumChatBCChatMsgs = 10
+    @_maxNumChatP2PChatMsgs = 10
+    @_currentUser = null
+    @_jsonObjects = {}
+    @_tileDB = {}
+    @_tileMeta = null
+    #@_tileLoadQueue = {}
+    #@_tileImageContentType = 'image/webp'
+    @_attachmentMeta = null
+    @_fotoMeta = null
+    #@_storedFilesAreBase64 = false
+    #@_grantedBytes = 0
+    #@_dirReaders = {}
+    requestedBytes = Math.pow(2, 26) # 64MB
+    @_fileUtils = new Comm.FileUtils requestedBytes, 'image/webp', false, fsInitCB
+
+  @tileKey: (xYZ) ->
+    xYZ[2]+'/'+xYZ[0]+'/'+xYZ[1]
+  
+  @poiKey: (poi) ->
+    'comm.poi.'+poi.id
+  
+  @poiNoteAttachmentKey: (poiNote) ->
+    'comm.poiNoteAttachment.'+poiNote.id
+  
+  @userPhotoKey: (user) ->
+    'comm.userPhoto.'+user.id
+
+  @uploadQueueKey: (storePath) ->
+    storePath[0]+'/'+storePath[1]
+
+  env: (withinEnvCB = null) ->
+    storeKey = 'comm.env'
+    env = JSON.parse(localStorage.getItem(storeKey))
+    if withinEnvCB?
+      withinEnvCB env
+      localStorage.setItem storeKey, JSON.stringify(env)
+    env
+
+  getLocalLocation: (lat, lng) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    if locations?
+      tLat = UTIL.trimPosVal lat
+      tLng = UTIL.trimPosVal lng
+#      closestLocation = {location: null, dist: -1}
+      locationIds = Object.keys(locations)
+      for locationId, idx in locationIds
+        location = locations[locationId]
+        if location.lat == tLat && location.lng == tLng
+          location.id = locationId
+          if locations.bookmarks? && (bookmark = locations.bookmarks[locationId])?
+            location.bookmark = bookmark
+          return location
+#        else
+#          dist = L.latLng(lat, lng).distanceTo L.latLng(location.lat, location.lng)
+#          if dist < closestLocation.dist
+#            closestLocation.location = location
+#      return closestLocation.location
+    null
+
+  getLocation: (locationId) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    if locations?
+      location = locations[locationId]
+      if location
+        if locations.pois?
+          poi = locations.pois[locationId]
+          if poi?
+            location.poiId = poi.id
+        if locations.bookmarks?
+          bookmark = locations.bookmarks[locationId]
+          if bookmark?
+            location.bookmark = bookmark
+        location.id = locationId
+      location
+    else
+      null
+  
+  # TODO - check for nearby-location
+  saveLocation: (location, flags = {}, locations = null) ->
+    storeKey = 'comm.locations'
+    unless locations?
+      locations = JSON.parse(localStorage.getItem(storeKey))
+    unless locations
+      locations = {}
+    # decimal-scale: 7
+    # locations[location.id] = { lat: Math.round(location.lat*10000000)/10000000,\
+    #                            lng: Math.round(location.lng*10000000)/10000000,\
+    locations[location.id] = { lat: UTIL.trimPosVal(location.lat),\
+                               lng: UTIL.trimPosVal(location.lng),\
+                               address: location.address}
+    if flags.homeBase?
+      locations.homeBase = location.id
+    if flags.poi?
+      unless locations.pois?
+        locations.pois = {}
+      unless locations.pois[location.id]?
+        locations.pois[location.id] = flags.poi
+    localStorage.setItem storeKey, JSON.stringify(locations)
+    location
+  
+  # after q-upload 
+  resetLocation: (oldLocation, newLocation, newPoi = null) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    flags = {}
+    if locations.homeBase? && locations.homeBase == oldLocation.id
+      flags.homeBase = true
+    if newPoi?
+      flags.poi = { id: newPoi.id }
+    delete locations[oldLocation.id]
+    if locations.pois? && locations.pois[oldLocation.id]?
+      delete locations.pois[oldLocation.id]
+    this.saveLocation newLocation, flags, locations
+  
+  getBookmark: (locationId) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    if locations.bookmarks?
+      bookmark = locations.bookmarks[locationId]
+      if bookmark?
+        bookmark.location = locations[locationId]
+        bookmark.location.id = locationId
+      bookmark
+    else
+      null
+
+  bookmark: (locationId, text = null) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    location = locations[locationId]
+    #bookmark = {}
+    # only bookmark existing locations
+    if location?
+      if locations.bookmarks?
+        bookmark = locations.bookmarks[locationId]
+        if bookmark?
+          if text?
+            bookmark.text = text
+          bookmark.updatedAt = Math.round(new Date().getTime()/1000)
+          localStorage.setItem storeKey, JSON.stringify(locations)
+        else
+          bookmark = if text? then {updatedAt: Math.round(new Date().getTime()/1000), text: text} else {updatedAt: Math.round(new Date().getTime()/1000)}
+          locations.bookmarks[locationId] = bookmark
+          localStorage.setItem storeKey, JSON.stringify(locations)
+      else
+        locations.bookmarks = {}
+        bookmark = if text? then {updatedAt: Math.round(new Date().getTime()/1000), text: text} else {updatedAt: Math.round(new Date().getTime()/1000)}
+        locations.bookmarks[locationId] = bookmark
+        localStorage.setItem storeKey, JSON.stringify(locations)
+      # setup return-value
+      location.id = locationId
+      bookmark.location = location
+      if locations.pois? && locations.pois[locationId]?
+        storeKey = StorageController.poiKey locations.pois[locationId]
+        location.poi = this.get storeKey
+      bookmark
+    else
+      null
+  
+  deleteBookmark: (locationId) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    if locations? && locations.bookmarks?
+      bookmark = locations.bookmarks[locationId]
+      if bookmark?
+        delete locations.bookmarks[locationId]
+        if locations.bookmarks.length == 0
+          delete locations.bookmarks
+        console.log 'TODO: STORAGE - deleteBookmark: maybe delete location as well if no poi, peer, ...'
+        localStorage.setItem storeKey, JSON.stringify(locations)
+
+  bookmarks: (callback = null) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(storeKey))
+    #locations = this.get 'comm.locations'
+    if locations.bookmarks?
+      bookmarks = []
+      locationIds = Object.keys(locations.bookmarks)
+      for locationId, idx in locationIds
+        bookmark = locations.bookmarks[locationId]
+        bookmark.location = locations[locationId]
+        bookmark.location.id = locationId
+        if locations.pois? && locations.pois[locationId]?
+          storeKey = StorageController.poiKey locations.pois[locationId]
+          bookmark.location.poi = this.get storeKey
+        if callback?
+          if callback(locations, bookmark, locationIds.length, idx)
+            bookmarks = null
+            break
+        else
+          bookmarks.push bookmark
+      bookmarks
+    else
+      []
+
+  getPoiForLocation: (locationId) ->
+    storeKey = 'comm.locations'
+    locations = JSON.parse localStorage.getItem(storeKey)
+    if locations? && locations.pois?
+      poi = locations.pois[locationId]
+#      if poi?
+#        poiKey = StorageController.poiKey {id: poi.id}
+#        #JSON.parse(localStorage.getItem(poiKey))
+#        this.get poiKey
+    else
+      null
+
+  getPoi: (poiId) ->
+    poiKey = StorageController.poiKey {id: poiId}
+    poi = JSON.parse(localStorage.getItem(poiKey))
+    if poi?
+      poi.getLocation = () ->
+        APP.storage().getLocation this.locationId
+    poi
+
+  deletePoi: (poiId) ->
+    poiKey = StorageController.poiKey {id: poiId}
+    
+    poi = JSON.parse(localStorage.getItem(poiKey))
+    if StorageController.isFileBased()
+      for note in poi.notes
+        Comm.FileUtils.instance().clear {poiNoteIds: [note.id]}
+
+    locationsKey = 'comm.locations'
+    locations = JSON.parse(localStorage.getItem(locationsKey))
+    delete locations.pois[poi.locationId]
+    if Object.keys(locations.pois).length == 0
+      delete locations.pois
+    localStorage.setItem 'comm.locations', JSON.stringify(locations)
+
+    Comm.UploadQ._deletePoiQEntries poi
+
+    localStorage.removeItem poiKey
+
+    poi
+
+  # callback 
+  getPois: (callback = null) ->
+    locations = this.get 'comm.locations'
+    pois = []
+    for key, i in Object.keys(localStorage)
+      #console.log(key)
+      #document.writeln i+'. key = '+key+'<br>'
+      if key.match(/^comm\.poi\./)?
+        poi = this.get key
+        location = locations[poi.locationId]
+        poi.lat = location.lat
+        poi.lng = location.lng
+        poi.address = location.address
+        if callback == null or callback(poi)
+          pois.push poi
+    pois
+  
+  poisWithinSearchBounds: (searchBounds, callback = null) ->
+    this.getPois (poi) ->
+      if UTIL.withinSearchBounds(poi.lat, poi.lng, searchBounds)
+        if callback?
+          callback poi
+        true
+      else
+        false
+
+  deletePoiNotes: (poi, callback = null) ->
+    poiKey = StorageController.poiKey {id: poi.id}
+    callCB = true
+    if StorageController.isFileBased()
+      if poi.notes.length >= 1
+        callCB = false
+        for note, idx in poi.notes
+          Comm.FileUtils.instance().clear {poiNoteIds: [note.id]}, (msg) ->
+              if idx==(poi.notes.length - 1)
+                callback poi
+    poi.notes = []
+    this.storePoi poi
+    if callCB
+      callback poi
+
+  # for peers and pois
+  saveNote: (type, id, text) ->
+    if type == 'peer'
+      this.saveUser(this.getUser(id), {note: text})
+    else
+      this.bookmark id, text
+  
+  deleteNote: (type, id) ->
+    if type == 'peer'
+      user = this.getUser id
+      delete user.note
+      this.saveUser user, {'delete': ['note']}
+    else
+      this.deleteBookmark id
+
+  isCurrentUser: (user) ->
+    this.getCurrentUser().id == user.id
+
+  getCurrentUser: () ->
+    if @_currentUser?
+      return @_currentUser
+    storeKey = 'comm.currentUser'
+    curU = JSON.parse(localStorage.getItem(storeKey))
+    if curU?
+      curU.getLastLocation = () ->
+          StorageController._SINGLETON.getLocation this.lastLocationId
+    curU
+
+  # functions don't get stored
+  saveCurrentUser: (currentUser, oldCurU = null) ->
+    storeKey = 'comm.currentUser'
+    if oldCurU?
+      for attrKey in Object.keys oldCurU
+        if `currentUser[attrKey] === undefined`
+          currentUser[attrKey] = oldCurU[attrKey]
+    localStorage.setItem storeKey, JSON.stringify(currentUser)
+    if `currentUser.getLastLocation === undefined`
+      currentUser.getLastLocation = () ->
+          StorageController._SINGLETON.getLocation this.lastLocationId
+    @_currentUser = currentUser
+  
+  getUsers: (callback = null, userDB = null) ->
+    storeKey = 'comm.users'
+    unless userDB?
+      userDB = JSON.parse(localStorage.getItem(storeKey))
+    if userDB?
+      users = []
+      peers = userDB.peers||{}
+      userIds = Object.keys(userDB)
+      peerIdx = -1
+      for userId, idx in userIds
+        if userId == 'peers'
+          continue
+        user = userDB[userId]
+        user.id = userId
+        peer = peers[userId]
+        if peer?
+          user.peerPort = peer.peerPort
+          peerIdx += 1
+        userIdx = idx - (peerIdx+1)
+        user.isPeer = () ->
+            this.peerPort?
+        user.getLastLocation = () ->
+            StorageController._SINGLETON.getLocation this.lastLocationId
+        if callback?
+          if callback(userDB, user, userIds.length, userIdx, peerIdx)
+            users = null
+            break
+        else
+          users.push user
+      users
+    else
+      []
+
+  #
+  # lastRelPosChange: date-secs
+  # curRelPosState: in|out
+  # relPos: {lastChange: State:}
+  #
+  getUser: (userId) ->
+    storeKey = 'comm.users'
+    users = JSON.parse(localStorage.getItem(storeKey))
+    user = if users? then users[userId] else null
+    if user?
+      user.id = userId
+      if users.peers? && (peer = users.peers[userId])?
+        user.peerPort = peer.peerPort
+      #delete user.chat
+      user.isPeer = () ->
+          this.peerPort?
+      user.getLastLocation = () ->
+          StorageController._SINGLETON.getLocation this.lastLocationId
+    else
+      console.log 'getUser: getting current user for id '+userId+'?'
+      curU = this.getCurrentUser()
+      user = if userId == curU.id then curU else null
+    user
+  
+  # a user is created from scratch to avoid temporary attributes from being saved
+  # all unkodified attributes will be saved -> xUser
+  # to delete attribute add flags = {delete: ['note',...]}
+  saveUser: (user, flags = {}, db = null) ->
+    curU = this.getCurrentUser()
+    # current user must be saved before any other user
+    if user.id == curU.id
+      console.log 'getUser: saving current user for id '+user.id+'!'
+      return this.saveCurrentUser(user, curU)
+    storeKey = 'comm.users'
+    users = if db? then db else JSON.parse(localStorage.getItem(storeKey))
+    unless users
+      users = {}
+    xUser = users[user.id]
+    unless xUser?
+      xUser = {}
+    users[user.id] = {username: user.username, lastLocationId: user.lastLocationId}
+    delete xUser.username
+    delete xUser.lastLocationId
+    if user.distance?
+      users[user.id].distance = user.distance
+      delete xUser.distance
+    if flags.peerPort?
+      unless users.peers?
+        users.peers = {}
+      unless users.peers[user.id]?
+        users.peers[user.id] = {peerPort: flags.peerPort}
+        delete xUser.peerPort
+    if flags.foto?
+      users[user.id].foto = flags.foto
+      delete xUser.foto
+    if flags.note?
+      users[user.id].note = flags.note
+      delete xUser.note
+    unmodifiedAttrKeys = Object.keys xUser
+    if unmodifiedAttrKeys?
+      for attrKey in unmodifiedAttrKeys
+        if flags.delete? && (attrKey in flags.delete)
+          continue
+        users[user.id][attrKey] = xUser[attrKey]
+    localStorage.setItem storeKey, JSON.stringify(users)
+    user.getLastLocation = () ->
+        StorageController._SINGLETON.getLocation this.lastLocationId
+    user
+  
+  deletePeer: (peer) ->
+    this.getPeers (userDB, user, num, idx) ->
+        delete user.peerPort
+        delete userDB.peers[user.id]
+        localStorage.setItem 'comm.users', JSON.stringify(userDB)
+        true
+
+  getPeers: (callback = null) ->
+    peers = []
+    users = JSON.parse(localStorage.getItem('comm.users'))
+    this.getUsers (userDB, user, num, userIdx, peerIdx) ->
+        if user.isPeer()
+          if callback?
+            if callback(userDB, user, userDB.peers.length, peerIdx)
+              return null
+          else
+            peers.push user
+        false
+      , users
+    peers
+
+  getChat: (peer = null) ->
+    if peer?
+      # no error-handling if peer not in localStroage
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      return users[peer.id].chat
+    else
+      conferenceKey = 'comm.conference'
+      conference = JSON.parse(localStorage.getItem(conferenceKey))
+      return conference
+
+  addChatMessage: (messageText, peer, p2pFrom = null) ->
+    if p2pFrom?
+      # no error-handling if peer not in localStroage
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      chat = users[peer.id].chat
+      unless chat?
+        chat = {}
+        users[peer.id]['chat'] = chat
+      entry = {}
+      entry[p2pFrom.id] = messageText
+      chat[Math.round(new Date().getTime()/1000)] = entry
+      msgKeys = Object.keys(chat)
+      # if msgKeys.length >= this._maxNumChatP2PChatMsgs
+      #   delete chat[msgKeys.sort()[0]]
+      for key, idx in msgKeys.sort()
+        if idx >= (msgKeys.length-this._maxNumChatP2PChatMsgs)
+          break
+        delete chat[key]
+      localStorage.setItem storeKey, JSON.stringify(users)
+      return chat
+    else
+      conferenceKey = 'comm.conference'
+      conference = JSON.parse(localStorage.getItem(conferenceKey))
+      unless conference?
+        conference = {}
+      entry = {}
+      entry[peer.id] = messageText
+      conference[Math.round(new Date().getTime()/1000)] = entry
+      msgKeys = Object.keys(conference)
+      # if msgKeys.length >= this._maxNumChatBCChatMsgs
+      #   delete conference[msgKeys.sort()[0]]
+      for key, idx in msgKeys.sort()
+        if idx >= (msgKeys.length-this._maxNumChatBCChatMsgs)
+          break
+        delete conference[key]
+      localStorage.setItem conferenceKey, JSON.stringify(conference)
+      return conference
+
+  pathKey: (path) ->
+    path[0].timestamp
+
+  getPaths: (user) ->
+    curU = this.getCurrentUser()
+    if curU.id == user.id
+      curU.paths
+    else
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      if users? then (if users[user.id]? then users[user.id].paths else null) else null
+
+  getPath: (user, pathKey = null, notDone = true) ->
+    paths = this.getPaths user
+    if paths?
+      unless pathKey?
+        pathKeys = Object.keys(paths)
+        pathKey = pathKeys[pathKeys.length-1]
+      curPath = paths[pathKey]
+      if (!curPath) || (notDone && curPath.done) then null else curPath.entries
+    else
+      null
+
+  # no error-handling if user not in localStroage
+  # TODO - currently just next path is added without checking last path for done.
+  #        no way yet to continue path before last path
+  startTracePath: (userId, position, db = {}) ->
+    curU = this.getCurrentUser()
+    if curU.id == userId
+      dbUser = curU
+    else
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      dbUser = users[userId]
+    
+    paths = dbUser.paths
+    unless paths?
+      paths = {}
+      dbUser['paths'] = paths
+    now = new Date().getTime()
+    path = {done: false, entries: [{timestamp: now, lat: position.lat, lng: position.lng}]}
+    paths[now] = path
+    
+    if curU.id == userId
+      this.saveCurrentUser dbUser
+    else
+      localStorage.setItem storeKey, JSON.stringify(users)
+    db['users'] = users
+    path.entries
+
+  # creates path if none exists for user or selected path is done
+  # no error-handling if pathKey doesn't exist
+  addToPath: (userId, position, path = null) ->
+    curU = this.getCurrentUser()
+    if curU.id == userId
+      dbUser = curU
+    else
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      dbUser = users[userId]
+
+    paths = dbUser.paths
+    if paths?
+      if path?
+        pathKey = path[0].timestamp
+      else
+        pathKeys = Object.keys(paths)
+        pathKey = pathKeys[pathKeys.length-1]
+      curPath = paths[pathKey]
+    else
+      db = {}
+      curPath = startTracePath dbUser, position, db
+      # curU/users was saved in startTracePath
+      dbUser = this.getCurrentUser()
+      users = db.users
+    
+    curPath.entries.push {timestamp: new Date().getTime(), lat: position.lat, lng: position.lng}
+    
+    if curU.id == userId
+      this.saveCurrentUser dbUser
+    else
+      localStorage.setItem storeKey, JSON.stringify(users)
+    curPath.entries
+
+  deleteFromPath: (userId, pathKey, index) ->
+    curU = this.getCurrentUser()
+    if curU.id == userId
+      dbUser = curU
+    else
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      dbUser = users[userId]
+    
+    paths = dbUser.paths
+    paths[pathKey].entries.splice index, 1
+    
+    if curU.id == userId
+      this.saveCurrentUser dbUser
+    else
+      localStorage.setItem storeKey, JSON.stringify(users)
+    paths[pathKey].entries
+
+  # no error-handling if user not in localStroage
+  # no error-handling if paths doesn't exist
+  stopTracePath: (userId, curPath = null) ->
+    curU = this.getCurrentUser()
+    if curU.id == userId
+      dbUser = curU
+    else
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      dbUser = users[userId]
+    
+    paths = dbUser.paths
+    if curPath?
+      path = paths[curPath[0].timestamp]
+    else
+      pathKeys = Object.keys(paths)
+      path = paths[pathKeys[pathKeys.length-1]]
+    if path.entries.length >= 2
+      path.done = true
+    else
+      delete paths[path.entries[0].timestamp]
+    
+    if curU.id == userId
+      this.saveCurrentUser dbUser
+    else
+      localStorage.setItem storeKey, JSON.stringify(users)
+    path.entries
+
+  # no error-handling if user not in localStroage
+  # no error-handling if paths doesn't exist
+  deleteTracePath: (userId, pathKey = null) ->
+    curU = this.getCurrentUser()
+    if curU.id == userId
+      dbUser = curU
+    else
+      storeKey = 'comm.users'
+      users = JSON.parse(localStorage.getItem(storeKey))
+      dbUser = users[userId]
+    
+    paths = dbUser.paths
+    unless pathKey?
+      pathKeys = Object.keys(paths)
+      pathKey = pathKeys[pathKeys.length-1]
+    delete paths[pathKey]
+    
+    if curU.id == userId
+      this.saveCurrentUser dbUser
+    else
+      localStorage.setItem storeKey, JSON.stringify(users)
+
+  storePoi: (poi, flatten = true) ->
+    poiKey = StorageController.poiKey poi
+    if flatten
+      StorageController._storeWithSeparateLocation poiKey, poi
+    else
+      localStorage.setItem poiKey, JSON.stringify(poi)
+
+  @_storeWithSeparateLocation: (poiKey, poi) ->
+    if poi.lat?
+      StorageController.instance().saveLocation {id: poi.locationId,\
+                                                 lat: poi.lat,\
+                                                 lng: poi.lng,\
+                                                 address: poi.address}, {poi: {id: poi.id}}
+    locationAttrs = ['lat','lng','address']
+    storePoi = {}
+    for key in Object.keys(poi)
+      if locationAttrs.indexOf(key) == -1
+        storePoi[key] = poi[key]
+    localStorage.setItem poiKey, JSON.stringify(storePoi)
+  
+  storePoiNote: (poi, note) ->
+    poiKey = StorageController.poiKey(poi)
+    this._storeWithoutPoi poiKey, note
+
+  # deletes from remote user - only storage
+  deletePoiNote: (poi, poiNoteId, callback) ->
+    poiNoteIndex = Storage.Model._findPoiNote({id: poiNoteId}, poi.notes)
+    poiNote = poi.notes[poiNoteIndex]
+    # poiNote is taken out here but poi will be saved in
+    poi.notes.splice poiNoteIndex, 1
+    if poiNote.attachment? && (!poiNote.attachment.content_type.match(/^embed:/)?)
+      APP.storage()._fileUtils.deleteAttachment poiNoteId, (msg) ->
+          # savePoi since poiNote is deleted (splice)
+          APP.storage().storePoi poi
+          callback poi, poiNote
+    else
+      # savePoi since poiNote is deleted (splice)
+      APP.storage().storePoi poi
+      callback poi, poiNote
+
+  # # if there is a poi in the note (backend-push or view-object) then save without.
+  # # TODO - prepare store-json when receiving the response - and then add view-attributes
+  # #        or even better - use function-params for persistable entities
+  _storeWithoutPoi: (poiKey, note) ->
+    if note.poi?
+      notePoi = note.poi
+      delete note.poi
+      poiNoteClone = JSON.parse(JSON.stringify(note))
+      storedJSON = this._storeWithSeparateUser poiKey, poiNoteClone
+      note.poi = notePoi
+      storedJSON
+    else
+      this._storeWithSeparateUser poiKey, note
+
+  _storeWithSeparateUser: (poiKey, note) ->
+    if note.user
+      this.saveUser note.user
+      user = note.user
+      delete note.user
+      note.userId = user.id
+      storedPoi = this.addToList poiKey, 'notes', note, false, Storage.Model.noteSort()
+      delete note.userId # FIXME - maybe it existed before?
+      note.user = user
+    else
+      storedPoi = this.addToList poiKey, 'notes', note, false, Storage.Model.noteSort()
+    storedPoi
+
+  # directory path for storing with file-api
+  @poiNoteAttachmentPath: (poiNote) ->
+    ['poiNotes', 'attachments', ''+poiNote.id]
+
+  @isFileBased: () ->
+    #StorageController._FS?
+    Comm.FileUtils._FS?
+    #false
+
+  clearCache: (flags = {tiles: true, poiNotes: null, users: null}) ->
+    #this.delete('tiles')
+    if StorageController.isFileBased()
+      # for dirName in VoyageX.MapControl.instance()._offlineZooms
+      #   this._removeDirectory dirName
+      # this._removeDirectory 'poiNotes'
+      # this._removeDirectory 'users'
+      Comm.FileUtils.instance().clearCache(flags)
+    for key, i in Object.keys(localStorage)
+      if (key.match(/\.poi\./)? || key.match(/\.locations$/)?) && (!(flags.poiNotes?&&flags.poiNotes))
+        continue
+      if key.match(/\.(users|currentUser)$/)? && (!(flags.users?&&flags.users))
+        continue
+      console.log('StorageController - clearCache: deleting \''+key+'\' ...')
+      this.delete(key)
+
+  loadAndPrefetchTile: (prefetchParams) ->
+    Comm.FileUtils.instance().loadAndPrefetchTile prefetchParams
+
+  prefetchTile: (prefetchParams) ->
+    Comm.FileUtils.instance().prefetchTile prefetchParams
+  
+  resolvedCB: (deferredModeParams) ->
+    view = deferredModeParams.view
+    if view?
+      Comm.FileUtils.instance().resolvedCB StorageController.tileKey([view.tile.column, view.tile.row, view.zoom])
+
+  storeTile: (xYZ, data, promise = null, deferredModeParams = null) ->
+    if StorageController.isFileBased()
+      #this._storeTileAsFile xYZ, null, data, deferredModeParams
+      Comm.FileUtils.instance().storeTile xYZ, data, promise, deferredModeParams
+    else
+      unless data?
+        storeKey = StorageController.tileKey xYZ
+        unless @_tileDB[storeKey]?
+          @_tileDB[storeKey] = promise
+          stored = localStorage.getItem storeKey
+          if stored == null
+            promise.then (url) ->
+                StorageController._SINGLETON.storeImage xYZ, url, deferredModeParams
+        return false
+
+      tileMeta = localStorage.getItem 'comm.tiles.tileMeta'
+      if tileMeta == null
+        @_tileMeta = { tilesByteSize: 0, numTiles: 0 }
+      else
+        @_tileMeta = JSON.parse(tileMeta)
+
+      storeKey = 'comm.tiles.'+data.properties.id
+      stored = localStorage.getItem storeKey
+      if stored == null
+        console.log 'caching tile: '+storeKey
+#        tileStoreZ = {}
+#        yEntry = {}
+#        yEntry[xYZ[1]] = data
+#        tileStoreZ[xYZ[0]] = [yEntry]
+#        localStorage.setItem 'comm.tiles.'+xYZ[2], JSON.stringify(listEntries)
+#TODO:refactored when started FileUtils        delete @_tileLoadQueue[StorageController.tileKey(xYZ)]
+        localStorage.setItem storeKey, data.properties.data
+        @_tileDB[storeKey] = data.properties.data
+        @_tileMeta.numTiles = @_tileMeta.numTiles+1
+        @_tileMeta.tilesByteSize = @_tileMeta.tilesByteSize+data.properties.data.length
+
+      localStorage.setItem 'comm.tiles.tileMeta', JSON.stringify(@_tileMeta)
+  
+  getTile: (xYZ, deferredModeParams = null) ->
+    if StorageController.isFileBased()
+      Comm.FileUtils.instance().getTile xYZ, deferredModeParams
+    else
+      storeKey = StorageController.tileKey(xYZ)
+#TODO:refactored when started FileUtils              stored = @_tileLoadQueue[storeKey]
+#TODO:refactored when started FileUtils              if stored?
+#TODO:refactored when started FileUtils                #console.log('getTile - stored in queue: '+storeKey); 
+#TODO:refactored when started FileUtils                return stored.promise
+      stored = @_tileDB['comm.tiles.'+storeKey]
+      unless stored?
+#        stored = @_tileLoadQueue[storeKey]
+#        unless stored?
+          stored = localStorage.getItem 'comm.tiles.'+storeKey
+          @_tileDB['comm.tiles.'+storeKey] = stored
+#        else
+#          console.log('stored in queue: '+storeKey); 
+      # for backward-compatibility
+      if stored?
+        stored
+      else
+        null
+
+  storePoiNoteAttachment: (poiNote, data, deferredModeParams = null) ->
+    if StorageController.isFileBased()
+      #this._storePoiNoteAttachmentAsFile poiNote, null, data, deferredModeParams
+      Comm.FileUtils.instance()._storeAsFile ['poiNotes', 'attachments', poiNote.id], null, data, deferredModeParams
+    else
+      attachmentMeta = localStorage.getItem 'comm.poiNotes.attachmentMeta'
+      if attachmentMeta == null
+        @_attachmentMeta = { bytes: 0, count: 0 }
+      else
+        @_attachmentMeta = JSON.parse(attachmentMeta)
+
+      storeKey = StorageController.poiNoteAttachmentKey poiNote
+      stored = localStorage.getItem storeKey
+      if stored == null
+        localStorage.setItem storeKey, data
+        @_attachmentMeta.count = @_attachmentMeta.count+1
+        @_attachmentMeta.bytes = @_attachmentMeta.bytes+data.length
+
+      localStorage.setItem 'comm.poiNotes.attachmentMeta', JSON.stringify(@_attachmentMeta)
+
+  storeUserPhoto: (user, data, deferredModeParams = null) ->
+    if StorageController.isFileBased()
+      Comm.FileUtils.instance()._storeAsFile ['users', 'photos', user.id], null, data, deferredModeParams
+    else
+      fotoMeta = localStorage.getItem 'comm.users.fotoMeta'
+      if fotoMeta == null
+        @_fotoMeta = { bytes: 0, count: 0 }
+      else
+        @_fotoMeta = JSON.parse(fotoMeta)
+
+      storeKey = StorageController.userPhotoKey user
+      stored = localStorage.getItem storeKey
+      if stored == null
+        localStorage.setItem storeKey, data
+        @_fotoMeta.count = @_fotoMeta.count+1
+        @_fotoMeta.bytes = @_fotoMeta.bytes+data.length
+
+      localStorage.setItem 'comm.users.fotoMeta', JSON.stringify(@_fotoMeta)
+
+  getPoiNoteAttachment: (poiNote, deferredModeParams = null) ->
+    storeKey = StorageController.poiNoteAttachmentKey poiNote
+    if StorageController.isFileBased()
+      console.log('getPoiNoteAttachment - '+storeKey)
+      Comm.FileUtils.instance().getPoiNoteAttachmentFile poiNote, deferredModeParams
+      deferredModeParams.promise
+    else
+      stored = localStorage.getItem storeKey
+      if stored?
+        stored
+      else
+        null
+
+  getUserPhoto: (user, deferredModeParams = null) ->
+    storeKey = StorageController.userPhotoKey user
+    if StorageController.isFileBased()
+      console.log('getUserPhoto - '+storeKey)
+      Comm.FileUtils.instance().getUserPhotoFile user, deferredModeParams
+      deferredModeParams.promise
+    else
+      stored = localStorage.getItem storeKey
+      if stored?
+        stored
+      else
+        null
+
+  storeImage: (xYZ, tileDataUrl, deferredModeParams = null) ->
+    storeKey = StorageController.tileKey(xYZ)
+    geoJSON = {
+        properties: {
+            id: storeKey,
+            data: tileDataUrl,
+            created_at: Date.now()
+          },
+        geometry: {
+            coordinates: [-1.0, -1.0] # TODO
+          }
+      }
+    this.storeTile xYZ, geoJSON, null, deferredModeParams
+
+  hasQueue: () ->
+    uploadQKey = 'comm.uploadQ.poiNotes'
+    localStorage.getItem(uploadQKey)?
+
+  queueUpload: (poi, poiNote, callback, attachmentData, deferredModeParams = null) ->
+    @_uploadQ = new Comm.UploadQ()
+    @_uploadQ.addUpload poi, poiNote, callback, attachmentData, deferredModeParams
+
+  queueDeletePoi: (poi, callback) ->
+    Comm.UploadQ.deletePoi poi, callback
+
+  queueDeletePoiNote: (poi, poiNoteId, callback) ->
+    Comm.UploadQ.deletePoiNote poi, poiNoteId, callback
+
+  uploadQueue: () ->
+    console.log 'Storage - uploadQueue: ...'
+    uploadQKey = 'comm.uploadQ.poiNotes'
+    stored = localStorage.getItem(uploadQKey)
+    qEntries = JSON.parse(stored)
+    if qEntries?
+      perPoiList = { numLeft: qEntries.length }
+      for qEntry in qEntries
+        action = if qEntry.action? then qEntry.action else 'create'
+        if qEntry.note?
+          poi = qEntry.poi
+          poiNote = qEntry.note
+        else
+          poi = APP.storage().getPoi qEntry.poiId
+          if action == 'delete'
+            if qEntry.id == -1
+              # delete poi
+              poi = { id: qEntry.poiId }
+              poiNote = null
+              perPoiList[qEntry.poiId] = { poi: poi, action: 'delete' }
+            else
+              # delete poi-note: real note was actually already deleted when adding delete-action to queue
+              #                  a virtual note is readded to pass info of this deletion to backend
+              poiNote = { id: -qEntry.id, userId: APP.user().id }
+              poi.notes.push poiNote
+          else
+            for n in poi.notes
+              if n.id == qEntry.id
+                poiNote = n
+                break
+        unless perPoiList[poi.id]?
+          perPoiList[poi.id] = {
+                                 poi: poi
+                                 location: StorageController.instance().getLocation(poi.locationId)
+                                 fileData: {}
+                                 action: {}
+                               }
+        unless perPoiList[poi.id].action == 'delete'
+          perPoiList[poi.id].action[poiNote.id] = action
+        # the following complexity is due the fact that attachments are loaded asynchronously but not
+        # all poiNotes have attachments (-> if file?)
+        deferred = $.Deferred()
+        deferredModeParams = { deferred: deferred,\
+                               promise: deferred.promise() }
+        ((poi, poiNote, fileName, perPoiList) ->
+             deferredModeParams.promise.then (url = null, file = null) ->
+                 # called when deferredModeParams.deferred.resolve() ...
+                 perPoiList.numLeft = perPoiList.numLeft - 1
+                 if file?
+                   perPoiList[poi.id].fileData[poiNote.id] = { file: file, name: fileName }
+                 if perPoiList.numLeft == 0
+                   delete perPoiList.numLeft
+                   APP.transfer().batchUpload perPoiList#, afterSyncCB
+        )(poi, poiNote, qEntry.fileName, perPoiList) 
+        if (action != 'delete') && poiNote.attachment? && (!poiNote.attachment.content_type.match(/^embed:/)?)
+          Comm.FileUtils.instance().getPoiNoteAttachmentFile poiNote, deferredModeParams
+        else
+          deferredModeParams.deferred.resolve()
+    true
+
+  # reserved listKeys:
+  # push: creates/uses an array for entries stored with storeKey
+  # if an array is defined for a storeKey then there can't be any other objects defined aside (@see this.pop())
+  addToList: (storeKey, listKey, data, fifo = true, insertPosCB = null) ->
+    stored = localStorage.getItem(storeKey)
+    if stored == null
+      if listKey == 'push'
+        listEntries = if data instanceof Array then data else [data]
+      else
+        listEntries = {}
+        @_jsonObjects[storeKey] = listEntries
+        listEntries[listKey] = if data instanceof Array then data else [data]
+      localStorage.setItem(storeKey, JSON.stringify(listEntries))
+      listEntries
+    else
+      # listKey == null: ^[
+      # listKey != null: ^.+?__listKey__:\s*[
+      listDetection = new RegExp('^(|.*?"'+listKey+'":\\s*)\\[')
+      if stored.trim().match(listDetection) == null
+        alert('expected Object/List - change of EntryType not implemented')
+      else
+        storedJSON = @_jsonObjects[storeKey]
+        unless storedJSON?
+          storedJSON = JSON.parse(stored)
+          @_jsonObjects[storeKey] = storedJSON
+        if listKey == 'push'
+          if data instanceof Array
+            for entry, i in data
+              if fifo
+                storedJSON.splice 0, 0, data[data.length-1-i]
+              else
+                storedJSON.push data
+          else
+            if fifo
+              storedJSON.splice 0, 0, data
+            else
+              storedJSON.push data
+        else
+          if insertPosCB?
+            inserted = false
+            for d, idx in storedJSON[listKey]
+              if insertPosCB d, data
+                storedJSON[listKey].splice idx, 0, data
+                inserted = true
+                break
+            unless inserted
+              storedJSON[listKey].push data
+          else if fifo
+            storedJSON[listKey].splice 0, 0, data
+          else
+            storedJSON[listKey].push data
+        localStorage.setItem(storeKey, JSON.stringify(storedJSON));
+      storedJSON
+
+  get: (storeKey, listKey = null) ->
+    # FIXME @_jsonObjects is an internal cache-object and should not be exposed to concurrent access
+    #       readonly but 'live' copy -> wrapper object! with methods getItem() for [] and real object 
+    @_jsonObjects[storeKey] || JSON.parse(localStorage.getItem(storeKey))
+
+  getNumElements: (storeKey, listKey = null) ->
+#    # TODO listKey != null, id might not be available
+#    if @_jsonObjects[storeKey]?
+#      Object.keys(@_jsonObjects[storeKey]).length
+#    else
+#      stored = localStorage.getItem(storeKey)
+#      if stored != null then (stored.match(/("id":)/g)||[]).length else 0
+#    #stored = localStorage.getItem(storeKey)
+#    #(if stored != null then Math.round(localStorage[storeKey].length/1024) else 0)+' kB'
+    tileMeta = localStorage.getItem 'comm.tiles.tileMeta'
+    if tileMeta == null
+      0
+    else
+      @_tileMeta = JSON.parse(tileMeta).numTiles
+
+  getByteSize: (storeKey, listKey = null) ->
+    # TODO listKey != null
+#    stored = localStorage.getItem(storeKey)
+#    if stored != null then stored.length else 0
+    tileMeta = localStorage.getItem 'comm.tiles.tileMeta'
+    if tileMeta == null
+      0
+    else
+      @_tileMeta = JSON.parse(tileMeta).tilesByteSize
+
+  delete: (storeKey, listKey = null) ->
+    # TODO listKey != null
+#    window.localStorage.clear()
+#    @_tileDB = null
+#    @_tileDB = {}
+#    @_tileMeta = { tilesByteSize: 0, numTiles: 0 }
+#    localStorage.removeItem 'comm.tiles.tileMeta'
+    localStorage.removeItem(storeKey)
+    if @_jsonObjects[storeKey]?
+      @_jsonObjects[storeKey] = null
+
+  # expects an array stored with 'push' as listKey in storeKey-entry
+  # TODO cache list-object as well like @_jsonObjects
+  pop: (storeKey) ->
+    stored = localStorage.getItem(storeKey)
+    unless stored == null
+      listEntries = JSON.parse(stored)
+      if listEntries?
+        listEntry = listEntries.pop()
+        if listEntries.length >= 1
+          localStorage.setItem(storeKey, JSON.stringify(listEntries));
+        else
+          localStorage.removeItem(storeKey)
+        listEntry
+    else
+      null
+
+  @instance: () ->
+    @_SINGLETON
+
+#
+# provides readonly-'live'-access to storage-entry
+#
+class Comm.StorageEntryWrapper
+  
+  constructor: (jsonObject) ->
+    @_jsonObject = jsonObject
+
+  getItem: (key) ->
+    @_jsonObject[key]
+
+#
+#
+#
+class Comm.UploadQ
+  
+  constructor: () ->
+    @_poi = null
+    @_poiNote = null
+    #@_callback = null
+    @_file = null
+    @_fileName = null
+    @_embed = null
+
+#  fileName: () ->
+#    @_fileName
+
+  setFile: (file) ->
+    @_file = file
+    @_embed = null
+
+  setEmbed: (embed) ->
+    @_embed = embed
+    @_file = null
+
+  # here the storing of the uploads will be completed.
+  # after everything is stored: callback will be called
+  addUpload: (poi, poiNote, callback, attachmentData, deferredModeParams = null) ->
+    @_poi = poi
+    @_poiNote = poiNote
+    #@_callback = callback
+    @_fileName = null
+    if attachmentData.fileName?
+      @_fileName = attachmentData.fileName
+    if attachmentData.blob?
+      unless @_fileName?
+        @_fileName = attachmentData.blob.name
+      poiNote.attachment = { content_type: attachmentData.blob.type, url: null }
+      this.setFile attachmentData.blob
+    else if attachmentData.embed?
+      this.setEmbed {content: attachmentData.embed, content_type: "embed:#{APP.model().getEmbedType(attachmentData.embed)}"}
+    else
+      this.setFile null
+
+    uploadQKey = 'comm.uploadQ.poiNotes'
+    qEntry = Comm.StorageController.instance().addToList uploadQKey, 'push', { id: poiNote.id, poiId: poi.id, fileName: @_fileName }
+    #this.addQEntry poi, poiNote
+
+    unless Comm.StorageController.isFileBased()
+      # FIXME - not implemented
+      Comm.StorageController.instance().storePoiNoteAttachment @_poiNote, base64ImgDataUrl, deferredModeParams
+      APP.view().cacheStats()
+    else
+      if @_file?
+        deferred = $.Deferred()
+        deferredModeParams = { fileUrl: Storage.Model.attachmentUrl,\
+                               fileMeta: poiNote.attachment,\
+                               fileOwner: poiNote,\
+                               deferred: deferred,\
+                               promise: deferred.promise() }
+        # deferredModeParams.deferred = $.Deferred()
+        # deferredModeParams.promise = deferredModeParams.deferred.promise()
+        ((uploadQ) ->
+            deferredModeParams.promise.then (url) ->
+                console.log 'UploadQ - addUpload: attachmentUrl-promise resolved to: '+url
+                uploadQ._poiNote.attachment.url = url
+                poiKey = Comm.StorageController.poiKey(uploadQ._poi)
+                storedPoi = Comm.StorageController.instance().addToList poiKey, 'notes', uploadQ._poiNote, false, Storage.Model.noteSort()
+                uploadQ._poi.notes = storedPoi.notes
+                callback uploadQ._poi, uploadQ._poiNote
+        )(this)
+        Comm.StorageController.instance().storePoiNoteAttachment @_poiNote, @_file, deferredModeParams
+      else
+        poiKey = Comm.StorageController.poiKey(@_poi)
+        if @_embed?
+          @_poiNote.attachment = @_embed
+        storedPoi = Comm.StorageController.instance().addToList poiKey, 'notes', @_poiNote, false, Storage.Model.noteSort()
+        @_poi.notes = storedPoi.notes
+        callback @_poi, @_poiNote
+
+  # this method is called after batch-upload with the actually persisted poi/note-data
+  # from the backend (especially the backend-ids) but BEFORE commit
+  # AFTER-commit call is in Main - _poisCB 
+  @syncResponseCallback: (location, poi, cbPoi, cbNewPoiNotes) ->
+    qPoiId = poi.id
+    #oldIdMarker = APP.getMarker poi, true
+
+    if location.id < 0
+      location = APP.storage().resetLocation location, { id: cbPoi.locationId,\
+                                                         lat: cbPoi.lat,\
+                                                         lng: cbPoi.lng,\
+                                                         address: cbPoi.address }, cbPoi
+      location.poiId = cbPoi.id
+      currentAddress = cbPoi.address
+      APP.markers().replace {id: poi.locationId}, location
+    if poi.id < 0
+      if poi.locationId >= 0
+        location.poiId = cbPoi.id
+        APP.markers().replace {id: poi.locationId}, location
+      poiKey = Comm.StorageController.poiKey {id: poi.id}
+      localStorage.removeItem poiKey
+      console.log 'Storage - syncResponseCallback: changing poi-id from = '+poi.id+' to '+cbPoi.id
+      poi.id = cbPoi.id
+      poi.locationId = location.id
+    # 1) find first locally-added/unsynched poiNote
+    curNewPoiNoteIdx = 0
+    for n, idx in poi.notes
+      if n.id < 0
+        curNewPoiNoteIdx = idx
+        break
+    # 2) merge new notes into poi - new notes can be from local-user or from remote-user
+    #                               local-notes are marked with local_time_secs <-> -id
+    for cbN, cbIdx in cbNewPoiNotes
+      if cbN.local_time_secs?
+        # there are as many notes with id < 0 as cbNewPoiNotes
+        # FIXME that's not true - there could be more notes added meanwhile from other users 
+        # so use local_time_secs: <-> id in backend-response (cb)
+        qN = poi.notes[curNewPoiNoteIdx]
+        if qN.attachment? && (!qN.attachment.content_type.match(/^embed:/))
+          ((poiNote, cbPoiNote) ->
+            #APP.storage()._fileUtils._dirReaders.entry.getFile '/poiNotes/attachments/'+poiNote.id, {}, (fileEntry) ->
+            APP.storage()._fileUtils._dirReaders.entries['poiNotes'].entries['attachments'].entry.getFile poiNote.id, {}, (fileEntry) ->
+                fileEntry.moveTo APP.storage()._fileUtils._dirReaders.entries['poiNotes'].entries['attachments'].entry, cbPoiNote.id
+                #fileEntry.moveTo APP.storage()._fileUtils._dirReaders.entry.getDirectory '/poiNotes/attachments/'
+                # next can only be done after file is moved
+                # the new note is passed on to display - use local file-system-url to work offline later
+                cbPoiNote.attachment.url = poiNote.attachment.url
+                APP.view().renameAttachment cbPoiNote
+              , (e) ->
+                  console.log('syncResponseCallback - '+e)
+          )(qN, cbN)
+          #qN.attachment.url = qN.attachment.url.replace(/[^\/]+$/, cbN.id)
+        qN.id = cbN.id
+      else
+        console.log '@deprecated - only local users\' notes  ar synced here'
+        # # new note added by other user - inserted @ backend-calculated pos
+        # # !! has to be updated in view
+        # cbN.updateView = true
+        # poi.notes.splice curNewPoiNoteIdx, 0, cbN
+        # curNewPoiNoteIdx += 1
+      curNewPoiNoteIdx += 1
+    
+    # save the poi with new id and new note-ids
+    poiKey = Comm.StorageController.poiKey {id: poi.id}
+    localStorage.setItem poiKey, JSON.stringify(poi)
+
+    UploadQ._removeFromQueue qPoiId
+
+    # test morgen
+    # # add all old notes for display -> @see _syncPoiCB
+    # for i in [0..poi.notes.length-cbNewPoiNotes.length-1] by 1
+    #   cbPoi.notes.splice i, 0, poi.notes[i]
+
+    # APP._syncPoiCB cbPoi, cbNewPoiNotes
+    APP._syncPoiCB poi, poi.notes
+
+  # deletes all queued entries(notes) for this poi
+  @_deletePoiQEntries: (poi, stored = localStorage.getItem('comm.uploadQ.poiNotes')) ->
+    if stored?
+      qEntries = JSON.parse(stored)
+      # delete all existing (not synced yet) q-entries for poi
+      numEntriesForPoi = 0
+      for idx in [qEntries.length-1..0] by -1
+        if qEntries[idx].poiId == poi.id
+          numEntriesForPoi += 1
+          qEntries.splice idx, 1
+      if numEntriesForPoi >= 1
+        localStorage.setItem uploadQKey, JSON.stringify(qEntries)
+
+  @deletePoi: (poi, callback) ->
+    uploadQKey = 'comm.uploadQ.poiNotes'
+    #stored = localStorage.getItem(uploadQKey)
+    #UploadQ._deletePoiQEntries poi, stored
+    APP.storage().deletePoi poi.id
+    qEntry = Comm.StorageController.instance().addToList uploadQKey, 'push', {id: -1, poiId: poi.id, fileName: null, action: 'delete'}
+    callback poi
+    qEntry
+
+  @deletePoiNote: (poi, poiNoteId, callback) ->
+    uploadQKey = 'comm.uploadQ.poiNotes'
+    stored = localStorage.getItem(uploadQKey)
+    if stored?
+      qEntries = JSON.parse(stored)
+      for qEntry, idx in qEntries
+        if qEntry.poiId == poi.id && qEntry.id == poiNoteId
+          # entry was not synced yet ...
+          qEntries.splice idx, 1
+          localStorage.setItem uploadQKey, JSON.stringify(qEntries)
+          return null
+    qEntry = Comm.StorageController.instance().addToList uploadQKey, 'push', {id: poiNoteId, poiId: poi.id, fileName: null, action: 'delete'}
+    APP.storage().deletePoiNote poi, poiNoteId, callback
+    qEntry
+
+#  addQEntry: (poi, poiNote) ->
+#    uploadQKey = 'comm.uploadQ.poiNotes'
+#    #this.addToList uploadQKey, 'push', { id: poiNote.id, poiId: poi.id, fileName: @_fileName }
+#    qNoteEntry = { id: poiNote.id, filename: @_fileName }
+#    stored = localStorage.getItem(uploadQKey)
+#    qEntries = JSON.parse(stored)
+#    qEntry = qEntries[poi.locationId]
+#    if qEntry?
+#      if qEntry[poi.id]
+#        qEntry[poi.id] << qNoteEntry
+#      else
+#        qEntry[poi.id] = [qNoteEntry]
+#    else
+#      qEntries[poi.locationId] = {}
+#      qEntries[poi.locationId][poi.id] = [qNoteEntry]
+#    localStorage.setItem(uploadQKey, JSON.stringify(qEntries))
+#    qEntries
+
+  @_removeFromQueue: (qPoiId, qEntries = null) ->
+    console.log 'Storage - _removeFromQueue: qPoiId = '+qPoiId
+    uploadQKey = 'comm.uploadQ.poiNotes'
+    unless qEntries?
+      qEntries = JSON.parse(localStorage.getItem(uploadQKey))
+    maxIdx = qEntries.length-1
+    for idxSub in [0..maxIdx]
+      i = maxIdx-idxSub
+      qEntry = qEntries[i]
+      if qEntry.poiId == qPoiId
+        console.log('removeFromQueue - removing Q-entry id: '+qEntry.id)
+        qEntries.splice i, 1
+        if qEntries.length >= 1
+          localStorage.setItem(uploadQKey, JSON.stringify(qEntries));
+        else
+          localStorage.removeItem(uploadQKey)
+    qEntries

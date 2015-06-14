@@ -1,0 +1,12 @@
+%div
+  %span#whoami_img_container
+    %span#whoami_img_edit{style: 'display: none'}
+    %span#whoami_img_nedit
+  #user_foto_input_container{style: 'display:none;'}
+    = render partial: '/users/foto', locals: {user: tmp_user()}
+  = form_for tmp_user, remote: true, method: :patch, :html => { :id => "settings_form" } do |f|
+    .user_settings{style: 'padding: 0px 0px 20px 0px;'}
+      #comm_peer_data{style: 'padding: 20px 0px 30px 0px;'}
+        = render partial: '/shared/peers', locals: {user: tmp_user}
+      = f.submit 'Sichern', :class => "btn btn-sm"
+

@@ -1,0 +1,44 @@
+- l_l = tmp_user.last_location
+= javascript_tag do
+  window.IS_MOBILE = #{is_mobile};
+  -#window.scrollTo(0,1);
+  window.DEBUG = false;
+  window.Comm = { StorageController: {}, FileUtils: {} };
+  window.Storage = { Model: {} };
+  window.VoyageX = { Gui: {}, StorageStrategy: {}, MapControl: {}, MarkerManager: {}, MediaManager: {}, View: {}, Version: {}, Uploads: {} };
+  -# CONSTANTS
+  window.VoyageX['PEER_CHANNEL_PREFIX'] = '#{PEER_CHANNEL_PREFIX}';
+  window.VoyageX.TILE_URL_TEMPLATE_INIT = '#{Leaflet.tile_layer}';
+  window.VoyageX.TILE_URL_TEMPLATE = '#{Leaflet.tile_layer}';
+  window.VoyageX.USE_GLOBAL_SUBSCRIBE = #{USE_GLOBAL_SUBSCRIBE};
+  window.VoyageX.IMAGES_MARKER_POI_PATH = '#{image_path('marker-icon-red.png')}';
+  window.VoyageX.IMAGES_MARKER_PEER_PATH = '#{image_path('marker-icon-yellow.png')}';
+  window.VoyageX.IMAGES_MARKER_BEAM_PATH = '#{image_path('marker-icon-beam.png')}';
+  window.VoyageX.IMAGES_PREVIEW_AUDIO_PATH = '#{image_path('audio-file.png')}';
+  window.VoyageX.IMAGES_PREVIEW_VIDEO_PATH = '#{image_path('video-file.png')}';
+  window.VoyageX.IMAGES_PREVIEW_NA_PATH = '#{image_path('no-preview.png')}';
+  window.VoyageX.IMAGES_NOISE_PATH = '#{image_path('noise.gif')}';
+  window.VoyageX.IMAGES_SWIPER_LOADING_PATH = '#{image_path('loading_200x100.png')}';
+  window.VoyageX.IMAGES_CTXNAVALERT_ON_PATH = '#{image_path('arrow-up-right_on.png')}';
+  window.VoyageX.IMAGES_CTXNAVALERT_OFF_PATH = '#{image_path('arrow-up-right_off.png')}';
+  window.VoyageX.SOUNDS_ALERT_PATH = '#{asset_path('Treat.mp3')}';
+  window.VoyageX.SOUNDS_MSG_IN_PATH = '#{asset_path('3rd_man_gugu.mp3')}'; // Drop.mp3
+  
+  window.currentAddress = '';
+  window.subscribeTo = [];
+  window.initSystemTimeStamp = #{DateTime.now.to_i};
+  window.initCommitHash = '#{Commit.latest.hash_id}';
+  window.initLocation = { id: #{l_l.id >= 0 ? l_l.id : -tmp_user.id}, lat: #{l_l.latitude}, lng: #{l_l.longitude}, address: '#{l_l.address}' };
+  window.showSearchRadius = false;
+  -#
+  -# for admin it's ok to have hard-coded data in app-cache. admin actually should clear appcache before signing in
+  -# TODO: if there's time also make SPI-conform
+  -# 
+  - if false && current_user.present? && current_user.is_admin?
+    window.adminSubscribeTo = [];
+    - User.where('id != ? and current_sign_in_at is not null', current_user.id).each do |u|
+      = render(partial: '/shared/admin_subscriptions', formats: [:js], locals: { sys_channel_enc_key: u.comm_port.sys_channel_enc_key }).html_safe
+  function systemInitCB() {
+  - if false && current_user.present? && current_user.is_admin?
+    = render(partial: '/shared/admin_subscriptions_handler', formats: [:js]).html_safe
+  }

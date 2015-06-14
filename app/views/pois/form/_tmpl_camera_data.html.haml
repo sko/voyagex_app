@@ -1,0 +1,20 @@
+%span
+  %button{tmpl: {id: 'media_input_init'}}
+    #{t('uploads.start_camera').html_safe}
+%br
+#media_input_container
+  #video_viewer
+    %video{tmpl: {id: 'media_input_capture'}, style: 'width: 307px; height: 250px;', autoplay: true}
+  #video_snapshot
+    %img{tmpl: {id: 'media_input_current'}, src: '', style: 'width: 307px; height: 250px;'}
+  %canvas{tmpl: {id: 'media_input_display'}, style: 'display: none;'}
+  %br{style: 'clear: both;'}
+  .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'media_input_capture_btn'}}
+    .ui-button-text
+      #{t('uploads.take_shot').html_safe}
+  .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'media_input_stop_btn'}}
+    .ui-button-text
+      Stop
+  .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'media_input_upload_btn'}}
+    .ui-button-text
+      #{t('uploads.upload_photo').html_safe}

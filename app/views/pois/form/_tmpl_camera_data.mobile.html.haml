@@ -1,0 +1,10 @@
+%span{style: 'float: left;'}
+  %button{tmpl: {id: 'media_input_init'}}
+    #{t('uploads.start_camera')}
+  = link_to '#', '#media_input_panel', id: ':remove', 'tmpl-id' => 'media_input_panel_show'
+%div{tmpl: {id: :upload_form_ui}}
+  %div{tmpl: {id: :media_input_container}, style: 'display: none; text-align: center;'}
+    %img{tmpl: {id: 'media_input_current'}, src: ''}
+    .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'media_input_upload_btn'}}
+      .ui-button-text
+        #{t('uploads.upload_photo').html_safe}

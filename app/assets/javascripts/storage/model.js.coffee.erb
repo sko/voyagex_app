@@ -1,0 +1,755 @@
+<% environment.context_class.instance_eval { include Rails.application.routes.url_helpers } %>
+
+if window.Storage?
+  window.Storage.Model = {}
+else
+  window.Storage = { Model: {} }
+
+class window.Storage.Model
+ 
+  @_SINGLETON = null
+
+  constructor: () ->
+    Model._SINGLETON = this
+
+  setHomeBase: (lat, lng, callback) ->
+    $.ajax
+      type: 'POST'
+      dataType: 'json'
+      url: '<%= set_user_detail_path(detail: 'home_base') %>'
+      data: {lat: lat, lng: lng}
+    .done (user) ->
+        APP.storage().saveLocation user.home_base, {homeBase: true}
+        callback user
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: errorhandling')
+
+  setRadarSettings: (callback) ->
+    $.ajax
+      type: 'POST'
+      dataType: 'json'
+      url: '<%= set_user_detail_path(detail: 'radar_settings') %>'
+      data: {search_radius_meters: APP.user().searchRadiusMeters}
+    .done (user) ->
+        callback user
+    .fail (jqXHR, textStatus) ->
+        callback null, jqXHR
+
+  grantFollow: (user) ->
+    this.setFollow user, true, (user, grant) ->
+        GUI.closeSystemMessage('popup')
+  
+  denyFollow: (user) ->
+    this.setFollow user, false, (user, grant) ->
+        GUI.closeSystemMessage('popup')
+
+  setFollow: (user, grant, callback) ->
+    data = {_method: 'patch' }
+    comm_peers = {}
+    comm_peers[user.id] = true
+    if grant
+      data['grant'] = { comm_peers: comm_peers }
+    else
+      data['deny'] = { comm_peers: comm_peers }
+    $.ajax
+      type: 'POST'
+      dataType: 'script'
+      url: '<%= user_path(id: ':id') %>'.replace(/:id/, user.id)
+      data: data
+    .done (res) ->
+        callback user, grant
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: errorhandling')
+
+  addBookmark: (latLng, callback) ->
+    $.ajax
+      type: 'POST'
+      dataType: 'json'
+      url: '<%= set_user_detail_path(detail: 'locations') %>'
+      data: {lat: latLng[0], lng: latLng[1]}
+    .done (user) ->
+        APP.storage().saveLocation user.last_location
+        bookmark = APP.storage().bookmark user.last_location.id
+        callback bookmark
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: errorhandling')
+
+  addNote: (type, id, text) ->
+    if text.trim() == ''
+      return false
+    $.ajax
+      type: 'POST'
+      dataType: 'json'
+      url: '<%= set_user_detail_path(detail: 'notes') %>'
+      data: if type=='peer' then {peer_id: id, text: text} else {location_id: id, text: text}
+    .done (user) ->
+        APP.storage().saveNote type, id, text
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: errorhandling')
+
+  deleteNote: (type, id) ->
+    $.ajax
+      type: 'DELETE'
+      dataType: 'json'
+      url: '<%= set_user_detail_path(detail: 'notes') %>'
+      data: if type=='peer' then {peer_id: id} else {location_id: id}
+    .done (user) ->
+        APP.storage().deleteNote type, id
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: errorhandling')
+
+  withLocation: (locationId, callback) ->
+    location = APP.storage().getLocation locationId
+    if location?
+      callback location
+    else
+      $.ajax
+        type: 'GET'
+        dataType: 'json'
+        url: '<%= location_data_path(location_id: ':locationId') %>'.replace(/:locationId/, locationId)
+      .done (location) ->
+          unless location.id
+            location.id = locationId
+          APP.storage().saveLocation location
+          callback location
+      .fail (jqXHR, textStatus) ->
+          console.log('TODO: errorhandling')
+
+  loadPois: (lat, lng, callback, flags = {withNotes: true, reset: false}) ->
+    # TODO - check cache since there could have been an offline period meanwhile
+    if APP.storage().hasQueue()
+      # get all pois via sync (TODO: add view-range for response)
+      #alert('TODO: q')
+      console.log('TODO: handle queue in loadPois')
+    if APP.isOnline()
+      $.ajax
+        type: 'GET'
+        dataType: 'json'
+        url: '<%= pois_path(lat: ':lat', lng: ':lng') %>'.replace(/:lat/, lat).replace(/:lng/, lng)
+      .done (pois) ->
+          for poi, i in pois
+            if flags.withNotes
+              sPoi = APP.storage().getPoi poi.id
+              unless sPoi?
+                sPoi = Model._syncPoi poi, (sPoi) ->
+                    console.log 'synced poi '+sPoi.id+' ...'
+              if flags.reset
+                APP.storage().deletePoiNotes sPoi, (poi) ->
+                    APP.model().loadPoiNotes poi.id, null, (poi, newPoiNotes) ->
+                        console.log 'loaded #'+newPoiNotes.length+' notes for poi '+poi.id+' ...'
+                        callback poi, newPoiNotes
+                      , false
+              else
+                APP.model().loadPoiNotes poi.id, null, (poi, newPoiNotes) ->
+                    console.log 'loaded #'+newPoiNotes.length+' notes for poi '+poi.id+' ...'
+                    callback poi, newPoiNotes
+                  , true
+            else
+              Model._syncPoi poi, callback
+      .fail (jqXHR, textStatus) ->
+          # get from localStorage
+          console.log('TODO: maybe get from local storage')
+          #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
+    else
+      if (Modernizr.localstorage)
+        pois = APP.storage().poisWithinSearchBounds(UTIL.searchBounds(lat, lng, APP.user().searchRadiusMeters))
+        for poi, i in pois
+          Model._syncPoi poi, callback
+
+  loadUsers: (callback, locationId = -1) ->
+    if APP.isOnline()
+      $.ajax
+        type: 'GET'
+        dataType: 'json'
+        url: '<%= peers_path(location_id: ':location_id') %>'.replace(/:location_id/, locationId)
+      .done (msg) ->
+          numUsers = msg.length
+          for user, i in msg
+            user.isPeer = () ->
+                this.peerPort?
+            user.getLastLocation = () ->
+                StorageController._SINGLETON.getLocation this.lastLocationId
+            callback user, i, numUsers
+      .fail (jqXHR, textStatus) ->
+          # get from localStorage
+          console.log('TODO: maybe get from local storage')
+          #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
+    else
+      if (Modernizr.localstorage)
+        if locationId == -1
+          peers = APP.storage().getPeers()
+        else
+          # TODO peers = APP.storage().peerssWithinSearchBounds(UTIL.searchBounds(lat, lng, APP.user().searchRadiusMeters))
+          console.log('TODO: implement search redius for peers ...')
+          peers = APP.storage().getPeers()
+        for peer in peers
+          callback peer
+
+  pullPois: () ->
+    $.ajax
+      type: 'POST'
+#      beforeSend: (xhr) ->
+#          xhr.setRequestHeader('X-CSRF-Token', $('meta[name=csrf-token]').first().attr('content'))
+      dataType: 'json'
+      url: '<%= pull_pois_path %>'
+      data: { commit_hash: APP.user().curCommitHash }
+    .done (res) ->
+        console.log('res.message OK = '+(res.message=='OK'))
+    .fail (jqXHR, textStatus) ->
+      # get from localStorage
+      console.log('TODO: ?')
+      #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
+
+  chatMessageReceived: (chatMessageId, peer) ->
+    url = '<%= chat_message_received_path(id: ':id') %>'.
+          replace(/:id/, chatMessageId)
+    $.ajax
+      type: 'PUT'
+#      beforeSend: (xhr) ->
+#          xhr.setRequestHeader('X-CSRF-Token', $('meta[name=csrf-token]').first().attr('content'))
+      dataType: 'json'
+      url: url
+    .done (res) ->
+        console.log('res.message OK = '+(res.message=='OK'))
+    .fail (jqXHR, textStatus) ->
+      # get from localStorage
+      console.log('TODO: ?')
+      #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
+
+  syncChatMessages: () ->
+    $.ajax
+      type: 'GET'
+#      beforeSend: (xhr) ->
+#          xhr.setRequestHeader('X-CSRF-Token', $('meta[name=csrf-token]').first().attr('content'))
+      dataType: 'json'
+      url: '<%= unread_chat_messages_path %>'
+    .done (res) ->
+        console.log('res.message OK = '+(res.message=='OK'))
+        p2pSenderIds = Object.keys(res['p2p'])
+        for peerId in p2pSenderIds
+          peer = APP.storage().getUser peerId
+#          lastMsgId = -1
+          for message in res['p2p'][peerId]
+#            if message.id > lastMsgId
+#              lastMsgId = message.id
+            APP.storage().addChatMessage message.text, peer, peer
+#          # notify backend of last received p2p-message
+#          APP.model().chatMessageReceived lastMsgId, peer
+#        lastMsgId = -1
+        for bcPeerMessages in res['bc']
+          bcSenderId = Object.keys(bcPeerMessages)[0]
+          peer = APP.storage().getUser bcSenderId
+          for message in bcPeerMessages[bcSenderId]
+#            if message.id > lastMsgId
+#              lastMsgId = message.id
+            message.type = 'message'
+            message.peer = peer
+            APP.storage().addChatMessage message.text, peer
+            APP._view._talkCB message
+#        # notify backend of last received bc-message
+#        APP.model().chatMessageReceived lastMsgId, peer
+        Comm.Comm.instance()._sendMessageQueue()
+    .fail (jqXHR, textStatus) ->
+      # get from localStorage
+      console.log('TODO: ?')
+      #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
+
+  # called from batch-upload to upload queue
+  syncUploadCachedQPoiData: (formData) ->
+    $.ajax
+      type: 'POST'
+#      beforeSend: (xhr) ->
+#          xhr.setRequestHeader('X-CSRF-Token', $('meta[name=csrf-token]').first().attr('content'))
+      dataType: 'json'
+      url: '<%= sync_pois_path %>'
+      data: formData
+      cache: false
+      contentType: false
+      processData: false
+    .done (res) ->
+        console.log('res.message OK = '+(res.errors.length==0))
+        if GUI.isMobile()
+          GUI.hideAjaxLoading()
+    .fail (jqXHR, textStatus) ->
+      # get from localStorage
+      console.log('TODO: ?')
+      #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
+
+  savePoiNote: (saveCB, doneCB) ->
+    if (Modernizr.localstorage)
+      poiId = parseInt $('#upload_form').attr('data-poiId')
+      afterQueueCB = (qPoi, qNewPoiNote) ->
+          # this is executed after poi-note is locally saved/queued
+          # if app is online it will be instantly uploaded, else it just stays in queue
+          # until @see APP.setOnline is called
+          location = APP.storage().getLocation qPoi.locationId
+          qPoi.lat = location.lat
+          qPoi.lng = location.lng
+          qPoi.address = location.address
+          qNewPoiNote.user = APP.user()
+          doneCB qPoi, qNewPoiNote
+          if APP.isOnline()
+            APP.storage().uploadQueue()
+          else
+            if GUI.isMobile()
+              GUI.hideAjaxLoading()
+      storeData = this._preparePoiNote poiId
+      saveCB (data) -> 
+          APP.storage().queueUpload storeData.poi,
+                                    storeData.poiNote,
+                                    afterQueueCB,
+                                    data
+    else
+      alert('This Browser Doesn\'t Support Local Storage so This Message will be lost if you quit the Browser')
+
+  # deletes from local user - causes sync
+  deletePoiNote: (poi, poiNoteId, doneCB) ->
+    #delete attachment
+    afterQueueDeleteCB = (poi, delPoiNote) ->
+        # this is executed after poi-note is locally deleted
+        # if app is online it will be instantly forwarded, else it just stays in queue
+        # until @see APP.setOnline is called
+        doneCB poi, delPoiNote
+        if APP.isOnline()
+          APP.storage().uploadQueue()
+        else
+          if GUI.isMobile()
+            GUI.hideAjaxLoading()
+    APP.storage().queueDeletePoiNote poi,
+                                     poiNoteId,
+                                     afterQueueDeleteCB
+
+  deletePoi: (poi, fromSyncCB, doneCB) ->
+    if fromSyncCB
+      # remote user deleted poi
+      APP.storage().deletePoi poi.id
+      doneCB poi
+    else
+      afterQueueDeleteCB = (poi) ->
+          # this is executed after poi is locally deleted
+          # if app is online it will be instantly forwarded, else it just stays in queue
+          # until @see APP.setOnline is called
+          doneCB poi
+          if APP.isOnline()
+            APP.storage().uploadQueue()
+          else
+            if GUI.isMobile()
+              GUI.hideAjaxLoading()
+      APP.storage().queueDeletePoi poi,
+                                   afterQueueDeleteCB
+
+  _preparePoiNote: (poiId) ->
+    id = -Math.round(new Date().getTime()/1000)
+    if poiId != -1
+      storeKey = Comm.StorageController.poiKey {id: poiId}
+      poi = JSON.parse localStorage.getItem(storeKey)
+      location = APP.storage().getLocation poi.locationId
+    else
+      selLatLng = APP.getSelectedPositionLatLng()
+      location = { id: id,\
+                   lat: selLatLng[0],\
+                   lng: selLatLng[1],\
+                   address: 'TODO' }
+      location = APP.storage().saveLocation location, { poi: { 'id': id } }
+      poi = { id: id,\
+              locationId: id,\
+              userId: APP.user().id,\
+              notes: [] }
+      APP.storage().storePoi poi, false
+    
+    poiNote = { id: id,\
+                userId: APP.user().id,\
+                text: $("#upload_comment").val() }
+
+    { poi: poi, poiNote: poiNote }
+
+  saveUserFoto64: (data, callback) ->
+    # TODO save before sending - if offline send later
+    url = '<%= set_user_detail_path(detail: 'foto_base64') %>'
+    #data._method = 'put'
+    $.ajax
+      type: 'POST'
+      dataType: 'json'
+      url: url
+      data: data
+    .done (user) ->
+        callback user
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: maybe get from local storage')
+
+  loadPoiNotes: (poiId, poiNoteId, callback, useCache = true) ->
+    poi = APP.storage().getPoi poiId
+    if useCache && poi? && poi.notes && poi.notes.length >= 1
+      # TODO now only returns stored poiNotes - but we have to check list for update
+      if poiNoteId?
+        for poiNote in poi.notes
+          if poiNote.id == poiNoteId
+            callback poi, [poiNote]
+            return poi.notes
+      else
+        callback poi, poi.notes
+        return poi.notes
+    unless poiNoteId?
+      poiNoteId = -1
+    $.ajax
+      type: 'GET'
+      dataType: 'json'
+      url: '<%= poi_comments_path(poi_id: ':poi_id', poi_note_id: '') %>'.replace(/:poi_id/, poiId)+poiNoteId
+    .done (msg) ->
+        Model.setupPoiForNote msg.poi
+        loadStats = { numAdded: msg.poi.notes.length, numLeft: msg.poi.notes.length, newNotes: [] }
+        for note, i in msg.poi.notes
+          Model.instance().syncWithStorage msg.poi, note, callback, loadStats
+    .fail (jqXHR, textStatus) ->
+        console.log('ERROR: no backend connection - load notes for poi '+poiId+' from local storage')
+        callback poi, poi.notes
+
+  # called for handling upload-response from backend - either currentUser or remoteUser
+  # might be called multiple times within one backend-response (->loadStats)
+  # stores attachment (!), sets loadStats-numLeft -1 and then calls _syncNewPoiNotes (with ready attachmentUrl
+  # and loadStats)
+  syncWithStorage: (poi, note, callback, loadStats = {numAdded:1,numLeft:1,newNotes:[]}, attachmentCached = false) ->
+    # store user
+    if note.user?
+      APP.storage().saveUser note.user
+      note.userId = note.user.id
+      delete note.user
+    if note.attachment? && (!note.attachment.content_type.match(/^embed:/))
+      # store image
+      if attachmentCached
+        attachmentUrl = note.attachment.url
+      else
+        attachmentUrl = Model._viewPoiNoteAttachment note
+      # @see leaflet-functionaltilelayer _loadTile: function / MapControl - drawTile
+      if (typeof attachmentUrl == 'string') 
+        console.log 'Model - syncWithStorage: attachmentUrl-string = '+attachmentUrl
+        loadStats.numLeft -= 1
+        Model._syncNewPoiNotes poi, note, loadStats, callback
+      else if (typeof attachmentUrl.then == 'function') 
+        # Assume we are dealing with a promise.
+        attachmentUrl.then (url) ->
+            console.log 'Model - syncWithStorage: attachmentUrl-promise resolved to: '+url
+            note.attachment.url = url
+            loadStats.numLeft -= 1
+            Model._syncNewPoiNotes poi, note, loadStats, callback
+    else
+      # embed, plain_text
+      loadStats.numLeft -= 1
+      Model._syncNewPoiNotes poi, note, loadStats, callback
+
+  # creates (local) poi if doesn't exist yet
+  @setupPoiForNote: (poi) ->
+    storedPoi = APP.storage().getPoi poi.id
+    unless storedPoi
+      unless poi.notes?
+        poi.notes = []
+      APP.storage().storePoi poi
+
+  @_syncPoi: (poi, callback) ->
+    localPoiData = APP.storage().getPoi poi.id
+    if localPoiData?
+      # TODO attributes / structure will not change. 
+      # currently: take all from remote, only add local which are not part of response-poi
+      for key in Object.keys(localPoiData)
+        if poi[key]?
+          if key == 'notes'
+            # TODO compare and clean up attachments; currently notes are not part of the response - they are handled separately
+            console.log('TODO: Model - _syncPoi: compare and clean up attachments')
+        else
+          poi[key] = localPoiData[key]
+    else
+      unless poi.notes?
+        poi.notes = []
+    APP.storage().storePoi poi
+    callback poi
+    poi
+
+  # loadStats ... {numAdded:>=1,numLeft:>=0,newNotes:[]}.
+  # on the last note passes completed new data to the callback (most likely a view)
+  @_syncNewPoiNotes: (poi, note, loadStats, callback) ->
+    existingPoi = APP.storage().getPoi poi.id
+    unless existingPoi.notes? && Model._findPoiNote(note, existingPoi.notes) >= 0
+      existingPoi = APP.storage().storePoiNote existingPoi, note
+      loadStats.newNotes.push note
+    if loadStats.numLeft == 0
+      callback existingPoi, loadStats.newNotes
+  
+  @noteSort: () ->
+    (a, b) ->
+        # the new note is appended in a overhead LIFO algorithm
+        if a.id >= 0
+          if b.id >= 0
+            a.id >= b.id
+          else
+            false
+        else
+          if b.id >= 0
+            true
+          else
+            a.id <= b.id
+
+  @_findPoiNote: (note, notes) ->
+    for n, idx in notes
+      if n.id == note.id
+        return idx
+    -1
+
+#  @poiNotes: (newPoiNotes, storedPoiNotes) ->
+#    # poinotes must always be sorted by id, also indicating their age-relation
+#    merged = []
+#    sIdx = 0
+#    for nIdx in [0..newPoiNotes.length-1] by 1
+#      for i in [sIdx..storedPoiNotes.length-1] by 1
+#        sIdx = i+1
+#        if newPoiNotes[nIdx].id < storedPoiNotes[i].id
+#          merged.push newPoiNotes[nIdx]
+#          for j in [nIdx..newPoiNotes.length-1] by 1
+#            if newPoiNotes[j].id < storedPoiNotes[i].id
+#              merged.push newPoiNotes[nIdx]
+#            break
+#        else
+#          merged.push storedPoiNotes[i]
+#      if i >= storedPoiNotes.length
+#        break
+#    # TODO add remaining poiNotes - only one of the following will continue
+#    for i in [nIdx..newPoiNotes.length-1] by 1
+#      merged.push newPoiNotes[i]
+#    for i in [sIdx..storedPoiNotes.length-1] by 1
+#      merged.push storedPoiNotes[i]
+#    merged
+
+  @_viewPoiNoteAttachment: (poiNote) ->
+    storeKey = Comm.StorageController.poiNoteAttachmentKey poiNote
+    if Comm.StorageController.isFileBased()
+      # use File-API
+      console.log '_viewPoiNoteAttachment - ........................................'+storeKey
+      # TODO ? maybe just query offline-zoom-files - see MapControl.tileUrl else of if view.zoom in mC._offlineZooms
+      # NO - because other zoom-levels may trigger some extra-action (liek prefetch ...)
+      deferred = $.Deferred()
+      deferredModeParams = { fileUrl: Model.attachmentUrl,\
+                             fileMeta: poiNote.attachment,\
+                             fileOwner: poiNote,\
+                             save: true,\
+                             update: true,\
+                             deferred: deferred,\
+                             promise: deferred.promise() }
+      APP.storage().getPoiNoteAttachment poiNote, deferredModeParams
+      deferredModeParams.promise
+    else
+      # use localStorage
+      stored = APP.storage().getPoiNoteAttachment poiNote
+      unless stored?
+        Model.attachmentUrl poiNote
+      else
+        console.log 'using cached poiNoteAttachment: '+storeKey
+        stored
+   
+  @attachmentUrl: (poiNote, deferredModeParams = null) ->
+    if APP.isOnline()
+      readyImage = APP.model().cacheAttachment poiNote, deferredModeParams
+    else
+      readyImage = APP.model()._notInCacheImage $('#attachment_canvas')[0], poiNote.attachment
+      if deferredModeParams != null
+        APP.storage().resolveOfflineNotInCache readyImage, deferredModeParams
+      readyImage
+
+  @_viewUserFoto: (user) ->
+    storeKey = Comm.StorageController.userPhotoKey user
+    if Comm.StorageController.isFileBased()
+      # use File-API
+      console.log '_viewUserFoto - ........................................'+storeKey
+      # TODO ? maybe just query offline-zoom-files - see MapControl.tileUrl else of if view.zoom in mC._offlineZooms
+      # NO - because other zoom-levels may trigger some extra-action (liek prefetch ...)
+      deferred = $.Deferred()
+      deferredModeParams = { fileUrl: Model.userPhotoUrl,\
+                             fileMeta: user.foto,\
+                             fileOwner: user,\
+                             save: true,\
+                             update: true,\
+                             deferred: deferred,\
+                             promise: deferred.promise() }
+      APP.storage().getUserPhoto user, deferredModeParams
+      deferredModeParams.promise
+    else
+      # use localStorage
+      stored = APP.storage().getUserPhoto user
+      unless stored?
+        Model.userPhotoUrl user
+      else
+        console.log 'using cached userPoto: '+storeKey
+        stored
+
+  # 
+  @userPhotoUrl: (user, deferredModeParams = null) ->
+    if APP.isOnline()
+      Model.storedUserPhoto user, deferredModeParams
+    else
+      readyImage = APP.model()._notInCacheImage $('#user_foto_canvas')[0], user.foto
+      if deferredModeParams != null
+        APP.storage().resolveOfflineNotInCache readyImage, deferredModeParams
+      readyImage
+
+  @storedUserPhoto: (user, deferredModeParams = null) ->
+    if Comm.StorageController.isFileBased()
+      unless deferredModeParams?
+        deferred = $.Deferred()
+        deferredModeParams = { fileUrl: Model.userPhotoUrl,\
+                               fileMeta: user.foto,\
+                               fileOwner: user,\
+                               save: true,\
+                               update: true,\
+                               deferred: deferred,\
+                               promise: deferred.promise() }
+      APP.model()._loadReadyUserPhoto user, deferredModeParams
+      deferredModeParams.promise
+    else
+      readyImage = APP.storage().getUserPhoto user, deferredModeParams
+      unless readyImage?
+        readyImage = APP.model()._loadReadyUserPhoto user, deferredModeParams
+
+  cacheAttachment: (poiNote, deferredModeParams = null) ->
+    if Comm.StorageController.isFileBased()
+      if poiNote.attachment?
+        switch poiNote.attachment.content_type.match(/^[^:\/]+/)[0]
+          when 'audio' 
+            attachment = this._loadReadyBlob poiNote, deferredModeParams
+          when 'image'
+            attachment = this._loadReadyPoiNoteImage poiNote, deferredModeParams
+          when 'video' 
+            attachment = this._loadReadyBlob poiNote, deferredModeParams
+      return ''
+    else
+      attachment = APP.storage().getPoiNoteAttachment poiNote, deferredModeParams
+      unless attachment?
+        #console.log 'cacheAttachment - '+Comm.StorageController.poiNoteAttachmentKey(poiNote)
+        #attachment = this._loadReadyPoiNoteImage poiNote, deferredModeParams
+        switch poiNote.attachment.content_type.match(/^[^\/]+/)[0]
+          when 'audio' 
+            attachment = this._loadReadyBlob poiNote, deferredModeParams
+          when 'image'
+            attachment = this._loadReadyPoiNoteImage poiNote, deferredModeParams
+          when 'video' 
+            attachment = this._loadReadyBlob poiNote, deferredModeParams
+      attachment
+
+  getEmbedType: (content) ->
+    if content.match(/^</)?
+      # youtube, ...
+    else
+      suffixMatch = content.match(/[^.]+$/)
+      if suffixMatch?
+        unless $.inArray(suffixMatch[0], ['jpg','jpeg','gif','png','webp']) == -1
+          return "image/#{suffixMatch[0]}"
+        else
+          console.log 'getEmbedType - TODO '
+    null
+
+  @instance: () ->
+    Model._SINGLETON
+
+  # load image from url and save
+  # has to be done sequentially becaus we're using one canvas for all
+  _loadReadyPoiNoteImage: (poiNote, deferredModeParams = null) ->
+    APP.model()._loadReadyImage poiNote.attachment.url, (image) ->
+        base64ImgDataUrl = APP.model()._toBase64 $('#attachment_canvas')[0], poiNote.attachment, image
+        unless Comm.StorageController.isFileBased()
+          APP.storage().storePoiNoteAttachment poiNote, base64ImgDataUrl, deferredModeParams
+          APP.view().cacheStats()
+        else
+          # actually we could store base64 in file as well
+          #APP.storage().storePoiNoteAttachment poiNote, base64ImgDataUrl, deferredModeParams
+          $('#attachment_canvas')[0].toBlob((blob) ->
+              APP.storage().storePoiNoteAttachment poiNote, blob, deferredModeParams
+            )
+        base64ImgDataUrl
+      , deferredModeParams
+
+  # load image from url and save
+  # has to be done sequentially becaus we're using one canvas for all
+  _loadReadyUserPhoto: (user, deferredModeParams = null) ->
+    APP.model()._loadReadyImage user.foto.url, (image) ->
+        base64ImgDataUrl = APP.model()._toBase64 $('#user_foto_canvas')[0], user.foto, image
+        unless Comm.StorageController.isFileBased()
+          APP.storage().storeUserPhoto user, base64ImgDataUrl, deferredModeParams
+          APP.view().cacheStats()
+        else
+          # actually we could store base64 in file as well
+          #APP.storage().storePoiNoteAttachment poiNote, base64ImgDataUrl, deferredModeParams
+          $('#user_foto_canvas')[0].toBlob((blob) ->
+              APP.storage().storeUserPhoto user, blob, deferredModeParams
+            )
+        base64ImgDataUrl
+      , deferredModeParams
+
+  # load binary data (video, audio, ...) from url and save
+  _loadReadyBlob: (poiNote, deferredModeParams = null) ->
+    unless Comm.StorageController.isFileBased()
+      # can't convert audio to data:uri ... TODO
+      return poiNote.attachment.url
+    #if window.location.host != poiNote.attachment.url.match(/^https?:\/\/([^\/]+)/)[1]
+    urlHostMatch = poiNote.attachment.url.match(/^https?:\/\/([^\/]+)/)
+    if urlHostMatch? # && window.location.host != urlHostMatch[1]
+      console.log '_loadReadyBlob - returning crossOrigin-url for poiNote['+poiNote.id+'].attachment: '+poiNote.attachment.url
+      if deferredModeParams?
+        deferredModeParams.deferred.resolve poiNote.attachment.url
+      return poiNote.attachment.url
+    $.ajax
+      type: 'GET'
+      dataType: 'binary'
+      processData: false
+      url: poiNote.attachment.url
+    .done (blob) ->
+        APP.storage().storePoiNoteAttachment poiNote, blob, deferredModeParams
+    .fail (jqXHR, textStatus) ->
+        console.log('TODO: errorhandling')
+    null
+
+  # load image from url and save
+  # imageMeta: {id, url, width, height}
+  # has to be done sequentially becaus we're using one canvas for all
+  _loadReadyImage: (imageUrl, onLoadCB, deferredModeParams = null) ->
+    #if window.location.host != imageUrl.match(/^https?:\/\/([^\/]+)/)[1]
+    urlHostMatch = imageUrl.match(/^https?:\/\/([^\/]+)/)
+    if urlHostMatch? # && window.location.host != urlHostMatch[1]
+      console.log '_loadReadyImage - returning crossOrigin-url for: '+imageUrl
+      if deferredModeParams?
+        deferredModeParams.deferred.resolve imageUrl
+      return imageUrl
+    if deferredModeParams == null
+      promise = true
+      deferred = $.Deferred()
+    img = new Image
+    img.crossOrigin = ''
+    #img.crossOrigin = imageUrl.match(/^https?:\/\/([^\/]+)/)[1]
+    img.onload = (event) ->
+      base64ImgDataUrl = onLoadCB this #event.target
+      if promise
+        deferred.resolve(base64ImgDataUrl)
+    if promise
+      readyImg = deferred.promise()
+      img.src = imageUrl
+      readyImg
+    else
+      img.src = imageUrl
+      null
+
+  _toBase64: (canvas, imageMeta, image) ->
+    canvas.width = imageMeta.width
+    canvas.height = imageMeta.height
+    context = canvas.getContext('2d')
+    context.drawImage(image, 0, 0)
+    canvas.toDataURL(imageMeta.content_type)
+
+  _notInCacheImage: (canvas, imageMeta) ->
+    canvas.width = imageMeta.width
+    canvas.height = imageMeta.height
+    context = canvas.getContext('2d')
+    context.fillStyle = "black";
+    context.fillRect(0,0,imageMeta.width,imageMeta.height);
+    context.fillStyle = "white";
+    context.fillRect(1,1,imageMeta.width-2,imageMeta.height-2);
+    context.fillStyle = "blue";
+    context.font = "bold 16px Arial";
+    context.fillText("Not Cached", 100, 80);
+    context.fillText(imageMeta.content_type, 40, 110);
+    canvas.toDataURL(@_tileImageContentType)

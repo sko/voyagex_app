@@ -1,0 +1,32 @@
+%fieldset
+  #user_foto_input_type
+    %button#user_foto_media_input_init
+      #{t('uploads.start_camera').html_safe}
+    %button#user_foto_file_input_init
+      #{t('uploads.select_file').html_safe}
+%span.ui-icon.ui-icon-circle-close{style: 'float:right;', onclick: 'javascript:APP.view().toogleUserFotoUpload();'}
+%br
+.user_foto_media_input_container#user_foto_cam_container{src: '', style: 'width: 675px; height: 250px;'}
+  #video_viewer
+    %video#user_foto_media_input_capture{style: 'width: 307px; height: 250px;', autoplay: true}
+  #video_snapshot
+    %img#user_foto_media_input_current{src: '', style: 'width: 307px; height: 250px;'}
+  %canvas#user_foto_media_input_display{style: 'display: none;'}
+  %br{style: 'clear: both;'}
+  .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only#user_foto_media_input_capture_btn
+    .ui-button-text
+      #{t('uploads.take_shot').html_safe}
+  .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only#user_foto_media_input_stop_btn
+    .ui-button-text
+      Stop
+  .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only#user_foto_media_input_upload_btn
+    .ui-button-text
+      #{t('uploads.upload_photo').html_safe}
+.user_foto_media_input_container#user_foto_file_container{style: 'display: none;'}
+  %script
+  = form_tag set_user_detail_path(detail: :foto), remote: true, format: :script, multipart: true, id: :user_foto_form, target: 'upload_target' do |f|
+    #user_foto_upload_file_controls
+      %span{style: 'float: left;'}
+      = file_field_tag 'foto', id: :user_foto_fileupload, accept: User::ACCEPTED_FOTO_CONTENT_TYPES.join(',')
+      %button.show-page-loading-msg{id: 'user_foto_upload_button', data: {type: 'json', theme: 'a', textonly: 'false', textvisible: 'true', msgtext: 'Loading'}}
+        #{t('uploads.upload').html_safe}

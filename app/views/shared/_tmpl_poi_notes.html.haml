@@ -1,0 +1,30 @@
+#tmpl_poi_notes_container{style: 'display: none;'}
+  %div{tmpl: {id: 'poi_notes_container'}, data: {poiId: '{poi_id}'}}
+    {poi_notes}
+    .poi_controls
+      %hr.controls_sep
+      %div{style: 'float: left; margin: 0px 0px 0px 5px;'}
+        = link_to image_tag('add-comment.png', style: 'height: 25px;', title: t('uploads.add_comment'), alt: t('uploads.add_comment')), '#', onclick: 'javascript:APP.poiNoteControls()'
+      -# toggle bookmark/note edit
+      %div{tmpl: {id: 'save-note'}, style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+        = link_to image_tag('add-bookmark.png', style: 'height: 25px;', title: t('pois.bookmark'), alt: t('pois.bookmark')), '#', onclick: "javascript:APP.bookmarkLocation({poi_id})"
+      %div{tmpl: {id: 'edit-note'}, style: 'display: none; float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+        = link_to image_tag('edit-note.png', style: 'height: 25px;', title: t('locations.view_note'), alt: t('locations.view_note')), '#', onclick: "javascript:APP.view().viewBookmarkNote(APP.storage().getBookmark({location_id}))"
+      %div{tmpl: {id: 'delete-note'}, style: 'display: none; float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+        = link_to image_tag('delete-bookmark.png', style: 'height: 25px;', title: t('pois.delete_bookmark'), alt: t('pois.delete_bookmark')), '#', onclick: "javascript:APP.deleteBookmark({poi_id})"
+      %div{style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px; display: {displayDelete};'}
+        = link_to image_tag('cancel.png', style: 'height: 25px;', title: t('pois.delete'), alt: t('pois.delete')), '#', onclick: "javascript:APP.deletePoi({poi_id})"
+
+#tmpl_poi_note{style: 'display: none;'}
+  .triangle-border.upload_comment{class: '{toggle}', tmpl: {toggle: 'left|right'}, style: 'vertical-align: top;', data: {id: '{poi_note_id}', index: '{i}'}}
+    %table
+      %tr
+        %td
+          %div{style: 'float: right; width: 13px; height: 13px; margin: -7px -5px 0px 0px; display: {displayDelete};'}
+            = link_to image_tag('cancel.png', style: 'height: 13px;', title: t('pois.delete_note'), alt: t('pois.delete_note')), '#', onclick: "javascript:APP.deletePoiNote({poi_id}, {poi_note_id})"
+          .poi_note{style: 'float: left; padding: 0px 10px 0px 0px;'}
+            %a{href: '#', onclick: 'javascript:APP.view().viewAttachment({poi_note_id});'}><
+              {media_file_tag}
+          %div{style: 'float: left !important; text-decoration: underline; font-weight: bold; padding-right: 10px;'}><
+            {username}:
+          {comment}

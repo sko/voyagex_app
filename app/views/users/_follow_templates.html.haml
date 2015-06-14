@@ -1,0 +1,86 @@
+%table#follow_templates{style: 'display: none;'}
+  %tbody#i_follow_template
+    %tr{id: "i_follow_{id}", data: {channelEncKey: '{channel_enc_key}'}}
+      %td{width: 5}
+        &nbsp;
+      %td
+        %img{tmpl: {src: '{foto_url}'}, name: "peer_photo_{id}", style: 'max-width: 35px !important;'}
+      %td{width: 15}
+        &nbsp;
+      %td
+        {username}
+      %td{width: 15}
+        &nbsp;
+      %td
+        = hidden_field_tag "follow[comm_peer_ports][{id}]", false, id: "i_follow_{id}.h"
+        = check_box_tag "follow[comm_peer_ports][{id}]", true, :checked, id: "i_follow_{id}.cb"
+        %label{'for' => "i_follow_{id}.cb"}
+  %tbody#i_want_to_follow_template
+    %tr{id: "i_want_to_follow_{id}"}
+      %td{width: 5}
+        &nbsp;
+      %td
+        %img{tmpl: {src: '{foto_url}'}, name: "peer_photo_{id}", style: 'max-width: 35px !important;'}
+      %td{width: 15}
+        &nbsp;
+      %td
+        {username}
+      %td{width: 15}
+        &nbsp;
+      %td
+        = hidden_field_tag "follow[comm_peer_ports][{id}]", false, id: "i_want_to_follow_{id}.h"
+        = check_box_tag "follow[comm_peer_ports][{id}]", true, :checked, id: "i_want_to_follow_{id}.cb"
+        %label{'for' => "i_want_to_follow_{id}.cb"}
+  %tbody#i_dont_follow_template
+    %tr{id: "i_dont_follow_{id}"}
+      %td{width: 5}
+        &nbsp;
+      %td
+        %img{tmpl: {src: '{foto_url}'}, style: 'max-width: 35px !important;'}
+      %td{width: 15}
+        &nbsp;
+      %td
+        {username}
+      %td{width: 15}
+        &nbsp;
+      %td
+        = hidden_field_tag "follow[comm_peer_ports][{id}]", false, id: "i_dont_follow_{id}.h"
+        = check_box_tag "follow[comm_peer_ports][{id}]", true, false, id: "i_dont_follow_{id}.cb", style: 'float: left;'
+        %label{'for' => "i_dont_follow_{id}.cb"} #{t('admin.check_to_follow')}
+  %tbody#follows_me_template
+    %tr{id: "follows_me_{id}"}
+      %td{width: 5}
+        &nbsp;
+      %td
+        %img{tmpl: {src: '{foto_url}'}, name: "peer_photo_{id}", style: 'max-width: 35px !important;'}
+      %td{width: 15}
+        &nbsp;
+      %td
+        {username}
+      %td{width: 15}
+        &nbsp;
+      %td
+        = hidden_field_tag "grant[comm_peers][{id}]", false, id: "follow_me_{id}.h"
+        = check_box_tag "grant[comm_peers][{id}]", true, :checked, id: "follow_me_{id}.cb"
+        %label{'for' => "follow_me_{id}.cb"}
+  %tbody#wants_to_follow_me_template
+    %tr{id: "wants_to_follow_me_{id}"}
+      %td{width: 5}
+        &nbsp;
+      %td
+        %img{tmpl: {src: '{foto_url}'}, style: 'max-width: 35px !important;'}
+      %td{width: 15}
+        &nbsp;
+      %td
+        {username}
+      %td{width: 15}
+        &nbsp;
+      %td
+        %div{style: 'float: left;'}
+          = hidden_field_tag "grant[comm_peers][{id}]", false, id: "grant_comm_peers_{id}.h"
+          = check_box_tag "grant[comm_peers][{id}]", true, false, id: "grant_comm_peers_{id}.cb"
+          %label{'for' => "grant_comm_peers_{id}.cb"} grant
+        %div{style: 'margin-left: 15px;'}
+          = hidden_field_tag "deny[comm_peers][{id}]", false, id: "deny_comm_peers_{id}.h"
+          = check_box_tag "deny[comm_peers][{id}]", true, false, id: "deny_comm_peers_{id}.cb"
+          %label{'for' => "deny_comm_peers_{id}.cb"} reject

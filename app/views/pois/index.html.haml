@@ -1,0 +1,15 @@
+- Upload.order('id desc').each do |upload|
+  %div{id: "upload_#{upload.id}"}
+    %div{style: 'float: left;'}
+      = upload_entity_to_view upload
+    %div{style: 'vertical-align: top; padding-left: 10px;'}
+      poi_note_id: #{upload.attached_to.id}
+      %br
+      upload_id: #{upload.id}
+      %br
+      = link_to 'Delete', "/pois/#{upload.id}", style: 'margin-left: 20px;', data: { remote: "true", format: :js, method: :delete }
+      - unless upload.attached_to.comments_on.present?
+        %b
+          Poi-id=#{upload.attached_to.poi.id}'s primary note!
+    %div{style: 'clear: both;'}
+      &nbsp;

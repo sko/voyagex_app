@@ -1,0 +1,25 @@
+development:
+  adapter: mysql2
+  database: voyagex_development
+  username: sko_voyagex
+  password: 76$sko
+
+test:
+  adapter: mysql2
+  database: voyagex_test
+  username: sko_voyagex
+  password: 76$sko
+
+staging:
+  adapter: mysql2
+  database: sko_voyagex
+  username: voyagex
+  password: 76$sko
+  host: localhost
+
+production:
+  adapter: mysql2
+  database: sko_voyagex
+  username: voyagex
+  password: 76$sko
+  host: localhost

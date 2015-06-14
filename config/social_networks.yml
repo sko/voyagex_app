@@ -1,0 +1,9 @@
+social_networks:
+#  twitter:
+#    key: "UHMTtoPCi6Ej3aLpzOHQ"
+#    secret: "BmtX68Wbo7PKjHcxZHi34xjV8OG1ZEwbXnvqbA1Ao"
+  facebook:
+#    key: "674280899350070"                       # voyagex.info.tm
+#    secret: "8e16f4cc6ae9749f08b45601bb4bbe8b"
+    key: "1014466245248402"                       # ctrl.privatedns.org:3005
+    secret: "434cf4fbd9bdedd9925df26dab800512"

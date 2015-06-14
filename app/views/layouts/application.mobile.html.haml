@@ -1,0 +1,92 @@
+!!!
+/[if lt IE 7] <html class="no-js lt-ie9 lt-ie8 lt-ie7">
+/[if IE 7] <html class="no-js lt-ie9 lt-ie8">
+/[if IE 8] <html class="no-js lt-ie9">
+/ [if gt IE 8]><!
+-# manifestDecl = [:production,:development].include?(Rails.env.to_sym) ? {manifest: "/manifest"} : {}
+-# cache_dev = false && (request.env['HTTP_HOST'].match(/^m\./).present? && [:development].include?(Rails.env.to_sym))
+-# manifestDecl = cache_dev||[:production].include?(Rails.env.to_sym) ? {manifest: "/manifest"} : {}
+- manifestDecl = {manifest: "/manifest"}
+%html.ui-mobile{manifestDecl}
+  / <![endif]
+  %head
+    %title VoyageX
+    %meta{name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'}
+    %meta{name: 'mobile-web-app-capable', content: 'yes'}
+    = render partial: 'layouts/init_js', locals: {is_mobile: true}
+    = stylesheet_link_tag "application.mobile", media: "all"
+    = stylesheet_link_tag "#{params[:controller]}.mobile", media: "all"
+    = csrf_meta_tags
+    = javascript_include_tag "preload.mobile"
+    - if Rails.env == 'development'
+      -# easier to debug ;)
+      = javascript_include_tag "/comm/faye-browser.js"
+      = javascript_include_tag "comm/comm.js"
+    - elsif Rails.env == 'test'
+      = javascript_include_tag "test/mock_init"
+      = javascript_include_tag "test/faye_client"
+      = javascript_include_tag "test/comm_comm"
+    - else
+      = javascript_include_tag "comm/application.js"
+  %body{data: {role: 'page'}}
+    #ruler
+    -##connection_state
+    #menu_top{'data-role' => 'header', 'data-position' => 'fixed'}
+      .navbar-header{'data-role' => 'navbar'}
+        %ul
+          %li
+            -# other mobile popup-links are declared further down - but for this we like position in menu ...
+            = link_to '', '#system_message_popup', id: 'system_message_popup_link', style: 'display: none;', 'data-rel' => 'popup', 'data-position-to' => 'origin'
+            %button{class: 'activate_chat', value: 'chat', 'data-icon' => 'comment', 'data-iconpos' => 'top'}
+          %li
+            %button{class: 'activate_map', value: 'map', 'data-icon' => 'location', 'data-iconpos' => 'top'}
+          %li
+            %button{class: 'activate_upload', value: 'upload', 'data-icon' => 'home', 'data-iconpos' => 'top'}
+    .auth{style: 'display:none;'}
+      = render partial: '/auth/sign_in.mobile', locals: {resource: User.new, resource_name: :user}
+      = render partial: '/auth/sign_up.mobile', locals: {resource: User.new, resource_name: :user}
+    :javascript
+      var mapWidth = $(window).width();
+      var mapHeight = $(window).height() - $("#navbar").height() - 40;
+      $("head").append("<style id='map_style' type='text/css'>#map {width:"+mapWidth+"px;height:"+mapHeight+"px !important;}</style>");
+      $("head").append("<style type='text/css'>.leaflet-bottom {width:"+($(window).width()-35)+"px !important;}</style>");
+      $("head").append("<style type='text/css'>#cur_loc_addr {position: fixed; top: "+41+"px; height: 20px; z-index: 1000 !important;}</style>");
+      var panelCtrlTopOff = $(window).height() - 41;
+      $("head").append("<style type='text/css'>#panel_control, #context_nav_open_icon {position: fixed; top: "+panelCtrlTopOff+"px; width: 32px; height: 43px; z-index: 1000 !important;}</style>");
+      $("head").append("<style type='text/css'>#context_nav_panel {width:"+($(window).width()-0)+"px;}</style>");
+      $("head").append("<style type='text/css'>#user_foto_media_input_current {width:"+Math.round($(window).width()*0.3)+"px;}</style>");
+    -# templates
+    = render partial: '/main/context_nav_panel.mobile'
+    = render partial: '/main/media_input_panel'
+    -#= render partial: '/pois/uploads.mobile'
+    = render partial: '/shared/uploads.mobile'#, locals: {resource: Upload.new, resource_name: :upload}
+    = render partial: '/shared/system_dialog'
+    #content{data: {role: 'content'}, style: 'padding: 0px !important;'}
+      = yield
+    #cur_loc_addr
+      &nbsp;
+    -#= link_to image_tag('arrow-up-right_off.png', id: 'context_nav_open_icon', style: 'z-index: 1001 !important'), '#', onclick: 'javascript:APP.contextNav()'
+    -#= link_to '', '#', id: 'fullscreen', onclick: "$('body')[0].webkitRequestFullscreen()"
+    #panel_control
+      -#{data: {role: 'footer', position: 'fixed'}}
+      %span{style: 'text-align: left; z-index: 11 !important;'}
+        = link_to image_tag('arrow-up-right_off.png', id: 'context_nav_open_icon', style: 'width: 32px; height: 43px;', class: 'context_nav_open_icon'), '#', onclick: 'javascript:APP.contextNav()'
+        = link_to '', '#context_nav_panel', id: 'open_context_nav_btn', style: 'display: none;'
+        = link_to '', '#upload_data_panel', id: 'open_upload_data_btn', style: 'display: none;'
+        = link_to '', '#attachment_view_panel', id: 'open_attachment_view_btn', style: 'display: none;'
+        = link_to '', '#system_message_panel', id: 'open_system_message_btn', style: 'display: none;'
+        -# next popup-link is already declared in menu, due to positioning ...
+        -#= link_to '', '#system_message_popup', id: 'system_message_popup_link', style: 'display: none;', 'data-rel' => 'popup', 'data-position-to' => 'window'
+    / panels nust be beginning or end in data-role: page
+    #attachment_view_panel{data: {role: 'panel', animate: 'true', display: 'overlay'}}
+    #attachment_view_panel_close_btn{style: 'display: none;'}
+      %div{style: 'float: right; z-index: 9999; position: absolute; top: 5px; right: 5px; padding: 0px 0px 0px 10px;'}
+        %span.ui-icon.ui-icon-circle-close{onclick: '$("#attachment_view_panel").panel("close");'}
+    .system_message#system_message_panel{data: {role: 'panel', animate: 'true', display: 'overlay'}}
+      #system_message
+    = javascript_include_tag 'application'
+    
+    - if params[:exec].present? && params[:exec].match(/^show_login_dialog/).present?
+      - email_arg = params[:exec].match(/^show_login_dialog_confirm_email/).present? ? "'#{tmp_user.unconfirmed_email}'" : 'null'
+      = javascript_tag do
+        GUI.showLoginDialog(#{email_arg});

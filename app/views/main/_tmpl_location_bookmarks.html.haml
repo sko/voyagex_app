@@ -1,0 +1,20 @@
+%table#tmpl_location_bookmarks{style: 'display: none;'}
+  %tbody.bookmark-container{data: {id: '{locationId}', lat: '{lat}', lng: '{lng}'}}
+    %tr
+      %td{colspan: 3}
+        = link_to '{address}', '#', onclick: "javascript:APP.loadLocation({id: {locationId}});"
+    %tr
+      %td{style: 'text-align: center;'}
+        {location_poi_or_no_poi}
+      %td{style: 'text-align: center;'}
+        {bookmark_updated_at}
+      %td{style: 'text-align: center;'}
+        {commented_by_user}
+
+#tmpl_location_bookmark_poi{style: 'display: none;'}
+  -#= link_to image_tag('attachment_url', style: 'max-width: 300px; max-height: 100px;'), '#', onclick: "javascript:APP.loadLocation({id: {locationId}});"
+  %a{href: '#', onclick: "javascript:APP.loadLocation({id: {locationId}});"}
+    %img{tmpl: {src: '{attachment_url}'}, style: "max-width: 300px; max-height: 100px;"}
+
+#tmpl_location_bookmark_no_poi{style: 'display: none;'}
+  kein POI

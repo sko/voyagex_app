@@ -1,0 +1,25 @@
+:javascript
+  $("head").append("<style type='text/css'>#upload_data_panel {width: "+($(window).width()-10)+"px !important; height:"+($(window).height()-50)+"px !important; overflow: scroll;}</style>");
+  var photoWidth = Math.round($(window).width() * 0.75);
+  var photoHeight = Math.round($(window).height() * 0.75);
+  $("head").append("<style type='text/css'>#media_input_capture, #media_input_current {width:"+photoWidth+"px;height:"+photoHeight+"px;}</style>");
+
+#upload_data_panel{style: 'min-height: initial', data: {role: 'panel', dismissible: 'false', animate: 'true', display: 'overlay'}}
+  #upload_data_panel_content
+    %div{style: 'float: right; padding: 0px 0px 0px 10px;'}
+      %span.ui-icon.ui-icon-circle-close{onclick: '$("#upload_data_panel").panel("close");'}
+    %fieldset.upload_source_select{data: {role: 'controlgroup', type: 'horizontal'}}
+      %input#data_upload_type_plain_text{type: 'radio', name: 'upload_type', value: 'plain_text', checked: true, onclick: 'APP.transfer().toggleUploadType(this)'}
+      %label{'for' => 'data_upload_type_plain_text'.html_safe} #{t('uploads.plain_text').html_safe}
+      %input#data_upload_type_camera{type: 'radio', name: 'upload_type', value: 'camera', onclick: 'APP.transfer().toggleUploadType(this)'}
+      %label{'for' => 'data_upload_type_camera'.html_safe} #{t('uploads.camera').html_safe}
+      %input#data_upload_type_file{type: 'radio', name: 'upload_type', value: 'file', onclick: 'APP.transfer().toggleUploadType(this)'}
+      %label{'for' => 'data_upload_type_file'.html_safe} #{t('uploads.file').html_safe}
+      %input#data_upload_type_embed{type: 'radio', name: 'upload_type', value: 'embed', onclick: 'APP.transfer().toggleUploadType(this)'}
+      %label{'for' => 'data_upload_type_embed'.html_safe} #{t('uploads.embed').html_safe}
+    #poi_note_input
+
+= render partial: '/pois/form/tmpl.mobile', locals: {poi_note: PoiNote.new}
+= render partial: '/shared/tmpl_poi_notes'
+
+%iframe{id: "upload_target", name: "upload_target", style: "display:none;"}

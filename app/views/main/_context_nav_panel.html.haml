@@ -1,0 +1,20 @@
+.modal
+  .modal-dialog#context_nav_panel
+    .modal-body
+      %ul
+        %li
+          = link_to 'Points of Interest', '#pois_preview', id: 'pois_preview_btn'
+        %li
+          = link_to 'Bookmarked Locations', '#location_bookmarks', id: 'location_bookmarks_btn'
+        %li
+          = link_to 'People of Interest', '#people_of_interest', id: 'people_of_interest_btn'
+      #pois_preview
+        -#= render partial: 'pois_preview'
+      #location_bookmarks
+        = render partial: 'location_bookmarks', locals: {user: tmp_user}
+      #people_of_interest
+        = render partial: 'people_of_interest', locals: {user: tmp_user}
+
+= render partial: 'tmpl_pois_preview'
+= render partial: 'tmpl_location_bookmarks'
+= render partial: 'tmpl_people_of_interest'

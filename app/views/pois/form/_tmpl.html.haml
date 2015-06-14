@@ -1,0 +1,38 @@
+#tmpl_poi_note_input{style: 'display: none;'}
+  .messages
+    %div{tmpl: {id: :upload_error}}
+    %div{tmpl: {id: :upload_message}}
+    %div{tmpl: {id: :upload_progress}}
+  %div{tmpl: {id: :upload_form_ui}}
+    .field
+      %span{style: 'float: left; padding-right: 20px;'}
+        #{t('uploads.comment')}
+      = text_area_tag 'upload_comment[text]', '', id: ':remove', 'tmpl-id' => 'upload_comment'
+    %div{tmpl: {id: :attachment_form_ui}}
+      %input{type: 'radio', name: 'upload_type', value: 'plain_text', checked: true, onclick: 'APP.transfer().toggleUploadType(this)'}
+        #{t('uploads.select_plain_text').html_safe} 
+      %input{type: 'radio', name: 'upload_type', value: 'camera', onclick: 'APP.transfer().toggleUploadType(this)'}
+        #{t('uploads.select_camera').html_safe} 
+      %input{type: 'radio', name: 'upload_type', value: 'file', onclick: 'APP.transfer().toggleUploadType(this)'}
+        #{t('uploads.select_file').html_safe}
+      %input{type: 'radio', name: 'upload_type', value: 'embed', onclick: 'APP.transfer().toggleUploadType(this)'}
+        #{t('uploads.select_embed').html_safe}
+      %div{tmpl: {id: :upload_plain_text_container}}
+        .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'plain_text_upload_btn'}}
+          .ui-button-text
+            #{t('uploads.upload_plain_text').html_safe}
+      %div{tmpl: {id: :upload_cam_container}, style: 'display: none;'}
+        = render partial: '/pois/form/tmpl_camera_data', locals: {poi_note: poi_note}
+      %div{tmpl: {id: :upload_file_container}, style: 'display: none;'}
+        -#%script
+        -#  var updateActionPathTmpl = '#{poi_note_path(id: ':comments_on_id')}';
+        = form_for poi_note, url: '#', remote: true, :html => { class: nil, multipart: true, 'tmpl-id' => 'upload_form', target: 'upload_target', 'data-poiId' => ':poi_id', 'data-commentsOnId' => ':comments_on_id' } do |f|
+          = render partial: '/pois/form/tmpl_file_data', locals: {poi_note: poi_note, f: f}
+          = hidden_field_tag 'location[latitude]', '', id: ':remove', 'tmpl-id' => 'location_latitude'
+          = hidden_field_tag 'location[longitude]', '', id: ':remove', 'tmpl-id' => 'location_longitude'
+      %div{tmpl: {id: :upload_embed_container}, style: 'display: none;'}
+        = text_area_tag 'upload_comment[embed]', '', id: ':remove_upload_comment_embed', 'tmpl-id' => 'embed'
+        %br
+        .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'embed_upload_btn'}}
+          .ui-button-text
+            #{t('uploads.upload_embed').html_safe}

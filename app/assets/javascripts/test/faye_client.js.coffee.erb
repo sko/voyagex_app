@@ -1,0 +1,34 @@
+<% if Rails.env.to_sym == :test %>
+
+class window.Comm.FayeClientMock
+
+  constructor: () ->
+    MOCK.out 'FayeClientMock'
+    @_channels = new Comm.FayeClientChannels(this)
+ 
+  addExtension: (extension) ->
+    console.log('Comm.FayeClient - addExtension '+extension)
+
+  publish: (channel, message) ->
+    console.log('Comm.FayeClient - publish to '+channel)
+
+  subscribe: (channel, callback) ->
+    @_channels[channel]
+    console.log('Comm.FayeClient - subscribe to '+channel)
+  
+  unsubscribe: (channel, callback) ->
+    console.log('Comm.FayeClient - unsubscribe from '+channel)
+
+
+class window.Comm.FayeClientChannels
+
+  constructor: (clientMock) ->
+    MOCK.out 'FayeClientChannel'
+    @_clientMock = clientMock
+    @_channelKeys = {}
+ 
+  hasSubscription: (channel) ->
+    console.log('Comm.FayeClientChannel - hasSubscription for '+channel)
+    false
+
+<% end %>

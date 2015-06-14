@@ -1,0 +1,57 @@
+!!!
+/[if lt IE 7] <html class="no-js lt-ie9 lt-ie8 lt-ie7">
+/[if IE 7] <html class="no-js lt-ie9 lt-ie8">
+/[if IE 8] <html class="no-js lt-ie9">
+/ [if gt IE 8]><!
+-# manifestDecl = [:production,:development].include?(Rails.env.to_sym) ? {manifest: "/manifest"} : {}
+-# cache_dev = false && (request.env['HTTP_HOST'].match(/^m\./).present? && [:development].include?(Rails.env.to_sym))
+-# manifestDecl = cache_dev||[:production].include?(Rails.env.to_sym) ? {manifest: "/manifest"} : {}
+- manifestDecl = {manifest: "/manifest"}
+%html{manifestDecl}
+  / <![endif]
+  %head
+    %title VoyageX
+    = render partial: 'layouts/init_js', locals: {is_mobile: false}
+    = stylesheet_link_tag "application", media: "all"
+    = stylesheet_link_tag params[:controller], media: "all"
+    = csrf_meta_tags
+    = javascript_include_tag "preload"
+    - if Rails.env == 'development'
+      -# easier to debug ;)
+      = javascript_include_tag "/comm/faye-browser.js"
+      = javascript_include_tag "comm/comm.js"
+    - elsif Rails.env == 'test'
+      = javascript_include_tag "test/mock_init"
+      = javascript_include_tag "test/faye_client"
+      = javascript_include_tag "test/comm_comm"
+    - else
+      = javascript_include_tag "comm/application.js"
+  %body
+    :javascript
+      var mapWidth = $(window).width() - 13;
+      var mapHeight = Math.round($(window).height() - 51);
+      $("head").append("<style id='map_style' type='text/css'>#map {width:"+mapWidth+"px;height:"+mapHeight+"px;}</style>");
+      $("head").append("<style type='text/css'>#cur_loc_addr {position: fixed; top: "+41+"px; height: 20px; z-index: 1000 !important;}</style>");
+      var panelCtrlTopOff = $(window).height() - 41;
+      $("head").append("<style id='panel_control_style' type='text/css'>#panel_control {position: fixed; top: "+panelCtrlTopOff+"px; height: 20px; z-index: 1000 !important;}</style>");
+    /%audio{id: "audio_notify"}
+    /  %source{src: "/3rd_man_gugu.amr", type: "audio/amr"}
+    = render partial: '/menus/top'
+    -# modal-templates 
+    = render partial: '/auth/sign_up', locals: {resource: User.new, resource_name: :user}
+    = render partial: '/auth/sign_in', locals: {resource: User.new, resource_name: :user}
+    #content{style: 'position: absolute; top: 50px;'}
+      = yield
+    #cur_loc_addr
+      &nbsp;
+    #panel_control
+      %span{style: 'text-align: left; z-index: 11 !important;'}
+      = link_to image_tag('arrow-up-right_off.png', id: 'context_nav_open_icon', style: 'width: 32px; height: 43px;', class: 'context_nav_open_icon'), '#', onclick: 'javascript:APP.contextNav()'
+    = render partial: '/main/context_nav_panel'
+    = render partial: '/main/system_message_panel'
+    = javascript_include_tag "application"
+    
+    - if params[:exec].present? && params[:exec].match(/^show_login_dialog/).present?
+      - email_arg = params[:exec].match(/^show_login_dialog_confirm_email/).present? ? "'#{tmp_user.unconfirmed_email}'" : 'null'
+      = javascript_tag do
+        GUI.showLoginDialog(#{email_arg});

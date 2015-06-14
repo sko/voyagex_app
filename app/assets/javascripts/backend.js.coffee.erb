@@ -1,0 +1,103 @@
+<% environment.context_class.instance_eval { include Rails.application.routes.url_helpers } %>
+# Comm::Engine.routes.url_helpers
+
+unless window.VoyageX?
+  window.VoyageX = {}
+class window.VoyageX.Backend
+  
+  @_SINGLETON = null
+  @_PING_INTERVAL_MILLIS = 10000
+  @_PING_CHECK_DELAY_MILLIS = 3000
+  @_POS_QUERY_INTERVAL_MILLIS = 20000
+  @_POS_QUERY_TIMEOUT_MILLIS = 60000
+
+  constructor: (callback) ->
+    Backend._SINGLETON = this
+    @_state = { online: null, pingActive: false, pingCount: 0, pingKey: -1 }
+    this.pingBackend callback
+
+  commConnStateCB: (online) ->
+    if online
+      VoyageX.Backend.instance()._state.pingActive &&= false
+      unless APP._online
+        APP.setOnline()
+    else
+      unless VoyageX.Backend.instance()._state.pingActive
+        VoyageX.Backend.instance().pingBackend() # disable in development mode when binding pry
+
+  _checkPingResponse: (pingKey) ->
+    if Backend.instance()._state.pingKey != pingKey
+      #console.log 'Backend - _checkPingResponse: pingKey = '+pingKey
+      Backend.instance()._state.pingKey = pingKey
+      setTimeout "VoyageX.Backend.instance().pingBackend()", Backend._PING_INTERVAL_MILLIS
+
+  # backend needs it's own ping because app can be online when backend is down.
+  pingBackend: (callback = null) ->
+    @_state.pingActive ||= true
+    pingKey = Math.round(Math.random() * 100000)
+    $.ajax
+      type: 'GET'
+      url: '<%= comm_ping_path(key: ':key') %>'.replace(/:key/, pingKey)
+      dataType: 'json'
+    .done (msg) ->
+        Backend.instance()._state.pingKey = msg.ping_key
+        Backend.instance()._state.online = true
+        if callback?
+          callback true
+        else
+          unless APP._online
+            APP.setOnline()
+          Backend.instance()._state.pingActive &&= (!APP._comm.isOnline())
+          if Backend.instance()._state.pingActive
+            setTimeout "VoyageX.Backend.instance().pingBackend()", Backend._PING_INTERVAL_MILLIS
+    .fail (jqXHR, textStatus) ->
+        Backend.instance()._state.online = false
+        if callback?
+          callback false
+        else
+          if APP._online
+            APP.setOffline()
+          #Backend.instance()._state.pingActive &&= (!APP._comm.isOnline())
+          if Backend.instance()._state.pingActive
+            setTimeout 'VoyageX.Backend.instance()._checkPingResponse('+pingKey+')', Backend._PING_CHECK_DELAY_MILLIS
+
+  # faye client takes some time to start up while backend already online
+  # first call might still 
+  isOnline: () ->
+    online = @_state.online || APP._comm.isOnline()
+    if APP._comm.isOnline()
+      @_state.pingActive &&= false
+    else
+      unless @_state.pingActive
+        # assume backend is down when faye is down.
+        online = @_state.online = false
+        # also check Comm.Comm - constructor
+        this.pingBackend()
+    online
+
+  register: (callback) ->
+    data = { _method: 'put' }
+    $.ajax
+      type: 'POST'
+      dataType: 'json'
+      url: '<%= comm_register_path %>'
+      data: data
+    .done (user) ->
+        callback user
+    .fail (jqXHR, textStatus) ->
+        console.log '!!! error when trying to register - no comm-initialisation ...'
+
+  curCommit: (callback) ->
+    pingKey = Math.round(Math.random() * 100000)
+    $.ajax
+      type: 'GET'
+      url: '<%= comm_ping_path(key: ':key') %>'.replace(/:key/, pingKey)
+      dataType: 'json'
+    .done (msg) ->
+        callback msg
+    .fail (jqXHR, textStatus) ->
+        callback {message: 'error: '+textStatus, error: 'connection'}
+
+  @instance: () ->
+    Backend._SINGLETON
+

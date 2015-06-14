@@ -1,0 +1,40 @@
+/ TODO
+.field{style: 'display: none;'}
+  %input{type: 'checkbox', name: 'peer_channel', value: 'talk', checked: true}
+    Chat
+  %input{type: 'checkbox', name: 'peer_channel', value: 'map_events'}
+    Map
+  %input{type: 'checkbox', name: 'peer_channel', value: 'uploads'}
+    Uploads
+  %input{type: 'checkbox', name: 'peer_channel', value: 'all'}
+    All
+-# width: '100%', 
+%table#followings
+  -# peers followed by user and granted
+  %tr
+    %th{colspan: 6}
+      #{t('admin.i_follow')}
+  %tbody#i_follow
+  -# peers followed by user and not granted
+  %tr
+    %th{colspan: 6}
+      #{t('admin.i_want_to_follow')}
+  %tbody#i_want_to_follow
+  -# peers not followed by user   / and comm_peers.id is null
+  %tr
+    %th{colspan: 6}
+      #{t('admin.i_dont_follow')}
+  %tbody#i_dont_follow
+  %tr
+    %th{colspan: 6}
+      <hr />
+  -# peers that follow user
+  %tr
+    %th{colspan: 6}
+      #{t('admin.follow_me')}
+  %tbody#follow_me
+  -# peers that requested grant to follow user
+  %tr
+    %th{colspan: 6}
+      #{t('admin.want_to_follow_me')}
+  %tbody#want_to_follow_me

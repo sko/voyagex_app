@@ -1,0 +1,25 @@
+#tmpl_poi_preview{style: 'display: none;'}
+  .poi-preview-container{data: {id: '{poiId}'}}
+    .poi-info
+      -#= link_to '{address}', location_path(location_id: '{locationId}'), data: { remote: 'true', format: :js }
+      = link_to '{address}', '#', onclick: 'javascript:APP.loadLocation({id: {locationId}});'
+    .poi-preview{style: "width: {maxWidth}px; text-align: center;"}
+      .swiper-container{id: "poi_swiper_{poiId}"}
+        .swiper-wrapper
+          {swipePanel}
+      {swipeIcon}
+    %hr{style: 'margin: 2px 0px 2px 0px;'}
+
+#tmpl_swipe_icon{style: 'display: none;'}
+  = image_tag('swipe.jpg', style: 'width: 35px; height: 35px;')
+
+#tmpl_swiper_slide{style: 'display: none;'}
+  -#, address: '{address}'
+  %span.swiper-slide{data: {poiId: '{poiId}', poiNoteId: '{poiNoteId}'}, style: 'width: {width}px; height: {height}px;'}
+    %img{tmpl: {src: '{attachment_url}'}, style: "width: {width}px; height: {height}px;"}
+
+- max_height = 100.0
+- max_width = 300
+- swiper_style = "width: #{max_width}px; height: #{max_height.to_i}px;"
+= javascript_tag do
+  $("head").append("<style type='text/css'>.swiper-container { #{swiper_style} }</style>");

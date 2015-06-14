@@ -1,0 +1,13 @@
+%div#groups_membership
+  my memberships
+  %br
+  = select(:user, :group_ids, tmp_user.groups.collect{|g|[g.name, g.id]}, {}, { :multiple => true, :size => 5 })
+%div#groups_created
+  groups created by me
+  %br
+  = select(:user, :group_ids, Group.where(creator: tmp_user).collect{|g|[g.name, g.id]}, {}, { :multiple => true, :size => 5 })
+
+  %br
+  add invitation dialog
+%div#group_create
+  add new group

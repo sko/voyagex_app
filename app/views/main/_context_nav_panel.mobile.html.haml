@@ -1,0 +1,28 @@
+#context_nav_panel{data: {role: 'panel', dismissible: 'false', animate: 'true', display: 'overlay'}}
+  %div{style: 'float: right; z-index: 9999; position: absolute; top: 5px; right: 5px; padding: 0px 0px 0px 10px;'}
+    %span.ui-icon.ui-icon-circle-close{onclick: '$("#context_nav_panel").panel("close");'}
+  #context_nav_tabs
+    -#{data: {role: 'tabs'}, style: 'margin-top: 20px;'}
+    -#%div
+      -#{data: {role: 'navbar'}}
+    %ul
+      %li{style: 'width: 45px; height: 37px;'}
+        = link_to '', '#pois_preview', style: 'width: 35px; height: 35px; margin: 0px; padding: 0px 5px 0px 5px;', data: {role: 'button', icon: 'location'}, id: 'pois_preview_btn'
+      %li{style: 'width: 45px; height: 37px;'}
+        = link_to '', '#location_bookmarks', style: 'width: 35px; height: 35px; margin: 0px; padding: 0px 5px 0px 5px;', data: {role: 'button', icon: 'eye'}, id: 'location_bookmarks_btn'
+      %li{style: 'width: 45px; height: 37px;'}
+        = link_to '', '#people_of_interest', style: 'width: 35px; height: 35px; margin: 0px; padding: 0px 5px 0px 5px;', data: {role: 'button', icon: 'user'}, id: 'people_of_interest_btn'
+      %li{style: 'height: 37px; padding: 0px 0px 0px 50px;'}
+        %span{style: 'float: right;'}
+          = image_tag 'fullscreen_on.png', id: 'fullscreen_mode_icon_on', onclick: 'GUI.toggleFullScreen(true)', style: 'display: none; max-height: 35px;'
+          = image_tag 'fullscreen_off.png', id: 'fullscreen_mode_icon_off', onclick: 'GUI.toggleFullScreen(false)', style: 'max-height: 35px;'
+    #pois_preview
+      -#= render partial: 'pois_preview'
+    #location_bookmarks
+      = render partial: 'location_bookmarks', locals: {user: tmp_user}
+    #people_of_interest
+      = render partial: 'people_of_interest', locals: {user: tmp_user}
+
+= render partial: 'tmpl_pois_preview'
+= render partial: 'tmpl_location_bookmarks'
+= render partial: 'tmpl_people_of_interest'

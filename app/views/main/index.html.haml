@@ -1,0 +1,139 @@
+- if is_mobile
+  #content_home{role: 'main', style: 'display: none;'}
+    = render partial: '/main/home.mobile'
+- else
+  #content_home{style: 'display: none;'}
+    = render partial: '/users/settings'
+    = render partial: '/shared/uploads', locals: {resource: Upload.new, resource_name: :upload}
+  
+= render partial: '/shared/help'
+
+= render partial: '/users/follow_templates'
+
+= javascript_tag do
+  var chatViewHeight = Math.round(($(window).height() - $(".navbar-header").height()) * 0.#{is_mobile ? 7 : 8}) - 10;
+  var chatInputHeight = $(window).height() - $(".navbar-header").height() - chatViewHeight;
+  $("head").append("<style type='text/css'>.chat_view {width:100%;height:"+chatViewHeight+"px !important;}</style>");
+  $("head").append("<style type='text/css'>.chat_input_container {width:"+($(window).width()-35)+"px !important;float: right;}</style>");
+  $("head").append("<style type='text/css'>.chat_input, .chat_input_text {width:100%;height:"+chatInputHeight+"px !important;}</style>");
+
+#content_chat{style: 'display: none;'}
+  .chat_view
+  .bc_controls
+    = link_to image_tag('link-poi.png', style: 'height: 32px;', title: t('chat.prompt_poi_id'), alt: t('chat.prompt_poi_id')), '#', onclick: "javascript:APP.view().promptPoiLinkInput('bc');"
+  .chat_input_container
+    = form_tag '#', method: :post, remote: true
+    = text_area_tag :message, '', class: :chat_input
+
+#content_map
+  %canvas{id: 'tile_canvas', style: 'display: none; width: 256px; height: 256px;'}
+  %canvas{id: 'attachment_canvas', style: 'display: none;'}
+  %canvas{id: 'user_foto_canvas', style: 'display: none;'}
+  #map
+
+#tmpl_auth_whoami{style: 'display: none;'}
+  = t('auth.whoami', username: ':username').html_safe
+#tmpl_whoami_edit{style: 'display: none;'}
+  = link_to set_user_detail_path(detail: :edit_username), data: { remote: "true", format: :js }, class: 'menu_link' do
+    %span.whoami>
+      {auth_whoami}
+#tmpl_auth_whoami_img{style: 'display: none;'}
+  %img{tmpl: {src: '{foto_url}'}, class: 'whoami-img', style: 'max-width: 100px !important; max-height: 100px !important;'}
+#tmpl_whoami_img_edit{style: 'display: none;'}
+  %a{href: '#edit_whoami_img', onclick: 'javascript:APP.view().toogleUserFotoUpload()'}
+    {auth_whoami_img}
+#tmpl_myfoto{style: 'display: none;'}
+  %img{tmpl: {src: '{foto_url}'}, class: 'whoami-img', style: 'margin: 3px 0px -10px 0px; max-height: 45px;'}
+
+#tmpl_bc_chat_msg{style: 'display: none;'}
+  %div{class: 'chat_message chat_message_{meOrOther} triangle-border {toggle}'}
+    %img{tmpl: {src: '{foto_url}'}, style: 'float: left; max-width: 35px !important;'}
+    {message}
+
+= render partial: 'tmpl_peer_popup'
+
+#tmpl_marker_controls{style: 'display: none;'}
+  %div{tmpl: {id: 'marker_controls'}}
+    %div{style: 'float: left; margin: 0px 0px 0px 5px;'}
+      = link_to image_tag('add-marker.png', style: 'height: 25px;', title: t('pois.add'), alt: t('pois.add')), '#edit_poi', onclick: "javascript:APP.poiNoteInput()"
+    -# toggle bookmark
+    %div{tmpl: {id: 'save-note'}, style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+      = link_to image_tag('add-bookmark.png', style: 'height: 25px;', title: t('pois.bookmark'), alt: t('pois.bookmark')), '#', onclick: "javascript:APP.bookmarkLocation()"
+    %div{tmpl: {id: 'edit-note'}, style: 'display: none; float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+      = link_to image_tag('edit-note.png', style: 'height: 25px;', title: t('locations.view_note'), alt: t('locations.view_note')), '#', onclick: "javascript:APP.bookmarkLocation()"
+    %div{tmpl: {id: 'delete-note'}, style: 'display: none; float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+      = link_to image_tag('delete-bookmark.png', style: 'height: 25px;', title: t('locations.delete_note'), alt: t('locations.delete_note')), '#', onclick: "javascript:APP.deleteBookmark()"
+    %div{style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+      = link_to image_tag('set-home.png', style: 'height: 23px;', title: t('admin.add_homebase'), alt: t('admin.add_homebase')), '#', onclick: "javascript:APP.setHomeBase()"
+    %div{style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+      = link_to image_tag('home.png', style: 'height: 23px;', title: t('admin.show_homebase'), alt: t('admin.show_homebase')), '#', onclick: "javascript:APP.loadLocation({id: APP.user().homebaseLocationId})"
+    %div{style: 'float: left; margin: 0px 5px 0px 5px; padding: 0px;'}
+      = link_to image_tag('radar.png', style: 'height: 23px;', title: 'radar-settings', alt: 'radar-settings'), '#', onclick: "javascript:APP.radarSettings()"
+    -# trace moved to radareditor
+      %div{style: 'float: left; margin: 0px 5px 0px 5px; padding: 0px;'}
+        %span{id: 'trace-ctrl-start-{user_id}'}
+          = link_to image_tag('start_trace.png', style: 'height: 23px;', title: 'start-trace-me', alt: 'start-trace-me'), '#', onclick: "javascript:APP.toggleTrace(APP.user(), {path_key})"
+        %span{id: 'trace-ctrl-stop-{user_id}', style: 'display: none;'}
+          = link_to image_tag('stop_trace.png', style: 'height: 23px;', title: 'stop-trace-me', alt: 'stop-trace-me'), '#', onclick: "javascript:APP.toggleTrace(APP.user(), {path_key})"
+    -#
+      %div{style: 'margin: 0px 0px 0px 5px; padding: 0px;'}
+        = link_to image_tag('arrow-up-right_off.png', style: 'height: 23px;', title: 'navigator', alt: 'navigator', class: 'context_nav_open_icon'), '#', onclick: "javascript:APP.contextNav()"
+
+#tmpl_note_editor{style: 'display: none;'}
+  .note_editor
+    %div
+      Add Note
+    %div{style: 'padding: 0px 0px 5px 0px;'}
+      = text_area_tag :note, '{text}', id: 'note_{type}_{id}', class: :note_editor
+
+#tmpl_radar_editor{style: 'display: none;'}
+  .radar_editor
+    .search_radius{style: 'float: left; padding-left: 5px;'}
+      = label_tag 'search_radius_input', t('admin.search_radius')
+      -#= form_tag set_user_detail_path(detail: :radar), method: :post, remote: true do
+        = text_field_tag :search_radius_meters, '{search_radius_meters}', size: 7, maxlength: 7, data: {role: 'none'}
+      %span#search_radius_meters>
+        {search_radius_meters} m
+      %div{tmpl: {id: 'search_radius_ctrl'}}
+    %fieldset{data: {role: 'controlgroup'}, tmpl: {id: 'search_radius_display_fs'}}
+      -#
+        %div{data: {role: 'fieldcontain'}}
+          %select{data: {role: 'flipswitch'}, onchange: 'VIEW_MODEL.toggleSearchRadiusDisplay(this)'}
+            %option{value: 'show'} show
+            %option{value: 'hide'} hide
+      %div
+        = radio_button_tag 'search_radius_display', 'show', false, id: ':tmpl', 'tmpl-id' => 'search_radius_display_show', data: {mini: true}, onclick: 'VIEW_MODEL.toggleSearchRadiusDisplay(this)'
+        = label_tag 'search_radius_display_show', 'show'
+      %div
+        = radio_button_tag 'search_radius_display', 'hide', true, id: ':tmpl', 'tmpl-id' => 'search_radius_display_hide', data: {mini: true}, onclick: 'VIEW_MODEL.toggleSearchRadiusDisplay(this)'
+        = label_tag 'search_radius_display_hide', 'hide'
+    %span{style: 'float: left;'}>
+      GPS:&nbsp;
+    %span{tmpl: {id: 'toggle_watch_position_off'}}
+      = image_tag 'locate_off.png', onclick: "APP.toggleWatchPosition('on')", style: 'max-width: 30px; max-height: 30px;'
+    %span{tmpl: {id: 'toggle_watch_position_on', style: 'display: none;'}}
+      = image_tag 'locate_on.png', onclick: "APP.toggleWatchPosition('off')", style: 'max-width: 30px; max-height: 30px;'
+    %div{style: 'float: right; margin: 0px 25px 0px 5px; padding: 0px;'}
+      %span{style: 'float: left;'}>
+        #{t('admin.watch_position')}:&nbsp;
+      %span{id: 'trace-ctrl-start-{user_id}'}
+        = link_to image_tag('start_trace.png', style: 'height: 23px;', title: 'start-trace-me', alt: 'start-trace-me'), '#', onclick: "javascript:APP.toggleTrace(APP.user(), {path_key})"
+      %span{id: 'trace-ctrl-stop-{user_id}', style: 'display: none;'}
+        = link_to image_tag('stop_trace.png', style: 'height: 23px;', title: 'stop-trace-me', alt: 'stop-trace-me'), '#', onclick: "javascript:APP.toggleTrace(APP.user(), {path_key})"
+
+#tmpl_trace-path_editor{style: 'display: none;'}
+  .trace-path_editor
+    %div
+      {trace-paths}
+
+#tmpl_trace-path_entry{style: 'display: none;'}
+  .trace-path_entry{tmpl: {id: 'tp_e_{path_key}'}}
+    = link_to '{date}', '#', onclick: "javascript:APP.view().viewTracePath(APP.storage().getUser({user_id}), '{path_key}')"
+    &nbsp;
+    %div{tmpl: {id: 'hide_trace-path_{path_key}'}, style: 'display: none;'}
+      [
+      = link_to 'hide', '#', onclick: "javascript:APP.view().hideTracePath('{path_key}')"
+      ]
+      [
+      = link_to image_tag('delete.png', style: 'height: 15px;', title: 'delete', alt: 'delete'), '#', onclick: "javascript:APP.deleteTracePath(APP.storage().getUser({user_id}), '{path_key}')"
+      ]

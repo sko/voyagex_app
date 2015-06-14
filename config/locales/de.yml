@@ -1,0 +1,62 @@
+de:
+  cancel: Abbrechen
+  menu:
+    meeting: Konferenz
+    chat: Chat
+    map: Karte
+    home: Heim
+  auth:
+    whoami: Ich bin %{username}
+    sign_up: Regristrieren
+    sign_in: Einloggen
+    sign_out: Ausloggen
+    user_unknown: Nicht Registriert
+    email_confirm_required: "
+      email-bestätigung für %{email} für&apos;s einloggen erforderlich
+      TODO: resend confirmation instructions"
+  locations:
+    view_note: Notiz anzeigen
+    delete_note: Notiz löschen
+  pois:
+    add: POI eintragen
+    bookmark: Ort merken
+    delete: POI löschen
+    delete_note: Kommentar löschen
+    delete_bookmark: Lesezeichen löschen
+  chat:
+    prompt_poi_id: PoI verlinken
+  peers:
+    chat: Chat
+    add_note: Notiz hinzufügen
+    people_of_interest: Benutzer denen ich folge ...
+  uploads:
+    upload: Hochladen
+    take_photo: Foto aufnehmen
+    start_camera: Kamera starten
+    take_shot: Schnappschuss aufnehmen
+    upload_plain_text: Sichern
+    upload_photo: Foto Hochladen
+    upload_file: Datei Hochladen
+    upload_embed: Embed sichern
+    select_plain_text: Nur Text
+    select_camera: Foto aufnehmen
+    select_file: Datei auswählen
+    select_embed: Embed einfügen
+    comment: Kommentar
+    add_comment: Kommentieren
+    add_comment_submit: Hinzufügen
+    plain_text: Text
+    camera: Foto
+    file: Datei
+    embed: Embed
+  admin:
+    search_radius: Suchradius
+    i_follow: Ich folge
+    i_want_to_follow: Ich möchte folgen
+    i_dont_follow: Ich folge nicht
+    check_to_follow: Folgen
+    follow_me: Folgen mir
+    want_to_follow_me: Möchten mir folgen
+    add_homebase: Als Homebase markieren
+    show_homebase: Homebase anzeigen
+    watch_position: Aufzeichnen

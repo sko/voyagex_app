@@ -1,0 +1,150 @@
+<% environment.context_class.instance_eval { include Rails.application.routes.url_helpers } %>
+
+# collects/sets-up upload-data from forms
+class window.VoyageX.Uploads
+
+  @_SINGLETON = null
+
+  constructor: () ->
+    Uploads._SINGLETON = this
+    # file-uploads ...
+    $(document).on 'click', '#upload_button', (event) ->
+      # don't send form
+      event.stopPropagation()
+      event.preventDefault()
+      APP.transfer().upload { saveData: (saveDataCB) ->
+          saveDataCB { blob: $('#fileupload')[0].files[0] }
+        , done: (poi, newNote) ->
+            $('#media_input_current').attr('src', '')
+            APP.transfer().afterUpload poi, [newNote]
+        }
+    # foto-uploads ...
+    $(document).on 'click', '#media_input_upload_btn', (event) ->
+      APP.transfer().upload { saveData: (saveDataCB) ->
+          $('#media_input_display')[0].toBlob((blob) ->
+              saveDataCB { blob: blob, fileName: 'foto_'+APP.user().id }
+            )
+        , done: (poi, newNote) ->
+            $('#media_input_current').attr('src', '')
+            APP.transfer().afterUpload poi, [newNote]
+        }
+    # embed-uploads ...
+    $(document).on 'click', '#embed_upload_btn', (event) ->
+      APP.transfer().upload { saveData: (saveDataCB) ->
+          saveDataCB { embed: $('#embed').val() }
+        , done: (poi, newNote) ->
+            $('#embed').val('')
+            APP.transfer().afterUpload poi, [newNote]
+        }
+    # plain-text-uploads ...
+    $(document).on 'click', '#plain_text_upload_btn', (event) ->
+      APP.transfer().upload { saveData: (saveDataCB) ->
+          saveDataCB {}
+        , done: (poi, newNote) ->
+            APP.transfer().afterUpload poi, [newNote]
+        }
+    # $.ajaxSetup({
+    #   headers: {
+    #     'X-CSRF-Token': $('meta[name="csrf-token"]').attr('content')
+    #   }
+    # })
+    # http://www.henryalgus.com/reading-binary-files-using-jquery-ajax/
+    # use this transport for "binary" data type
+    $.ajaxTransport("+binary", (options, originalOptions, jqXHR) ->
+        # check for conditions and support for blob / arraybuffer response type
+        if (window.FormData && ((options.dataType && (options.dataType == 'binary')) || (options.data && ((window.ArrayBuffer && options.data instanceof ArrayBuffer) || (window.Blob && options.data instanceof Blob)))))
+          return {
+              # create new XMLHttpRequest
+              send: (_, callback) ->
+                  # setup all variables
+                  xhr = new XMLHttpRequest()
+                  url = options.url
+                  type = options.type
+                  # blob or arraybuffer. Default is blob
+                  dataType = options.responseType || "blob"
+                  data = options.data || null
+                  xhr.addEventListener('load', () ->
+                      data = {}
+                      data[options.dataType] = xhr.response
+                      # make callback and send data
+                      callback(xhr.status, xhr.statusText, data, xhr.getAllResponseHeaders())
+                    )
+                  xhr.open(type, url, true);
+                  xhr.responseType = dataType;
+                  xhr.send(data);
+              ,
+              abort: () ->
+                  jqXHR.abort()
+          }
+      )
+
+  getUploadTargetId: () ->
+    #commentsOnId = parseInt $('#upload_form').attr('data-commentsOnId')
+    commentsOnIdMatch = $('#upload_form').attr('action').match(/^\/[^\/]+\/(-?[0-9]+)/)
+    commentsOnId = (if commentsOnIdMatch? then parseInt(commentsOnIdMatch[1]) else null)
+
+  # uploadDataTypeHandler: { saveData: (saveDataCB) -> ..., done: (poi, newNote) -> ...}
+  upload: (uploadDataTypeHandler) ->
+    APP.model().savePoiNote uploadDataTypeHandler.saveData, uploadDataTypeHandler.done 
+
+  afterUpload: (poi, newNotes) ->
+    $('#upload_comment').val('')
+    GUI.closeUploadDataDialog()
+    #APP.panPosition poi.lat, poi.lng, poi.address
+    VoyageX.View.addPoiNotes poi, newNotes
+
+  batchUpload: (perPoiList) ->
+    formData = new FormData()
+    perPoiListKeys = Object.keys(perPoiList)
+    for entryKey, idx in perPoiListKeys
+      perPoiEntry = perPoiList[entryKey]
+      if perPoiEntry.action == 'delete'
+        formData.append 'pois['+entryKey+'][action]', 'delete'
+      else
+        formData.append 'pois['+entryKey+']location[latitude]', perPoiEntry.location.lat
+        formData.append 'pois['+entryKey+']location[longitude]', perPoiEntry.location.lng
+        skipInputNames = ['location[latitude]','location[longitude]','poi_note[text]','poi_note[file]']
+        for note in perPoiEntry.poi.notes
+          if note.id >= 0
+            continue
+          formData.append 'pois['+entryKey+']notes['+note.id+'][text]', note.text
+          formData.append 'pois['+entryKey+']notes['+note.id+'][action]', perPoiEntry.action[note.id]
+          if perPoiEntry.fileData[note.id]?
+            formData.append 'pois['+entryKey+']notes['+note.id+'][file]', perPoiEntry.fileData[note.id].file, perPoiEntry.fileData[note.id].name
+          else if note.attachment? && note.attachment.content_type.match(/^embed:/)?
+            formData.append 'pois['+entryKey+']notes['+note.id+'][embed][content_type]', note.attachment.content_type
+            formData.append 'pois['+entryKey+']notes['+note.id+'][embed][content]', note.attachment.content
+      uploadForm = $('#tmpl_poi_note_input #new_poi_note').first()
+      uploadForm.find('input').each ((formData, skipInputNames) ->
+          () ->
+              if $.inArray($(this).attr('name'), skipInputNames) == -1
+                formData.append($(this).attr('name')+'['+entryKey+']', $(this).attr('value'))
+          )(formData, skipInputNames)
+    APP.model().syncUploadCachedQPoiData formData
+
+  toggleUploadType: (selected) ->
+    if selected.value == 'file'
+      $('#upload_cam_container').css('display', 'none')
+      $('#upload_file_container').css('display', 'block')
+      $('#upload_embed_container').css('display', 'none')
+      $('#upload_plain_text_container').css('display', 'none')
+    else if selected.value == 'camera'
+      $('#upload_cam_container').css('display', 'block')
+      $('#upload_file_container').css('display', 'none')
+      $('#upload_embed_container').css('display', 'none')
+      $('#upload_plain_text_container').css('display', 'none')
+    else if selected.value == 'embed'
+      $('#upload_cam_container').css('display', 'none')
+      $('#upload_file_container').css('display', 'none')
+      $('#upload_embed_container').css('display', 'block')
+      $('#upload_plain_text_container').css('display', 'none')
+    else
+      $('#upload_cam_container').css('display', 'none')
+      $('#upload_file_container').css('display', 'none')
+      $('#upload_embed_container').css('display', 'none')
+      $('#upload_plain_text_container').css('display', 'block')
+
+  @instance: () ->
+    unless Uploads._SINGLETON?
+      Uploads._SINGLETON = new Uploads()
+    Uploads._SINGLETON

@@ -1,0 +1,14 @@
+!!!
+/[if lt IE 7] <html class="no-js lt-ie9 lt-ie8 lt-ie7">
+/[if IE 7] <html class="no-js lt-ie9 lt-ie8">
+/[if IE 8] <html class="no-js lt-ie9">
+/ [if gt IE 8]><!
+%html.ui-mobile
+  / <![endif]
+  %head
+    %title VoyageX Upload
+    = csrf_meta_tags
+    = javascript_include_tag "jquery"
+    = javascript_include_tag "jquery_ujs"
+  %body
+    = yield

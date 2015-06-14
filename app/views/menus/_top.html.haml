@@ -1,0 +1,72 @@
+#menu_top.container
+  .navbar.navbar-inverse.navbar-fixed-top{role: 'navigation'}
+    .container
+      .navbar-header
+        %ul.nav.navbar-nav
+          %li
+            = link_to t('menu.meeting'), '#conference', id: 'menu_chat', onclick: "javascript:VIEW_MODEL.menuNavClick('chat')", class: 'navbar-brand'
+          %li
+            = link_to t('menu.map'), '#map', id: 'menu_map', onclick: "javascript:VIEW_MODEL.menuNavClick('map')", class: 'navbar-brand'
+          %li
+            = link_to t('menu.home'), '#home', id: 'menu_home', onclick: "javascript:VIEW_MODEL.menuNavClick('home')", class: 'navbar-brand'
+          %li{style: 'padding: 0px 0px 0px 20px;'}
+            %span{style: 'float :left; color: #ffffff; padding: 15px 5px 0px 0px;'}
+              %span#whoami_form{style: 'display: none'}
+                - @_details = [:username]
+                = render('/users/edit_details')
+              %span#whoami_edit
+              %span#whoami_nedit{style: 'display: none'}
+            %span.myfoto{style: 'float :left; z-index:1003;'}
+            .logout-link{style: "display: #{user_signed_in? ? 'block' : 'none'}; float: right;"}
+              = link_to t('auth.sign_out'), destroy_user_session_path, class: 'navbar-inverse navbar-brand', data: { remote: "true", format: :js, method: :delete }
+          %li{id: :sign_up_or_in, style: "display: #{user_signed_in? ? 'none' : 'inline'}; padding: 7px 0px 0px 0px;"}
+            .local_auth{style: "float: left;"}
+              .login-link
+                = link_to t('auth.sign_in'), '#', id: 'show_sign_in', onclick: 'javascript:GUI.showLoginDialog()', class: 'sign_opt menu_link'
+              .reg-link
+                = link_to t('auth.sign_up'), '#', id: 'show_sign_up', onclick: 'javascript:GUI.showSignUpDialog()', class: 'sign_opt menu_link'
+            - if Rails.env.to_sym == :development || true
+              .omniauth-links{style: "float: right; margin: 5px 10px 0px 10px;"}
+                .button.facebook_login
+                  = link_to user_omniauth_authorize_path(:facebook) do
+                    = image_tag 'facebook-icon.png', style: 'width: 25px; height: 25px;'
+          %li{style: 'padding: 5px 0px 0px 20px;'}
+            - lcls = lang_change_links request, ['c']
+            %span
+              = link_to image_tag("en.png", style: "border-width:0px;width:10px;height:10px;"), '#', onclick: "javascript:document.location.href=VIEW_MODEL.linkForView('#{lcls[0]}', 'en', '#{lcls[1]}');", :style => "color:#00dd;"
+            %br
+            %span
+              = link_to image_tag("de.png", style: "border-width:0px;width:10px;height:10px;"), '#', onclick: "javascript:document.location.href=VIEW_MODEL.linkForView('#{lcls[0]}', 'de', '#{lcls[1]}');", :style => "color:#00dd;"
+          %li{style: 'padding: 0px 0px 0px 0px;'}
+            = link_to image_tag('info.png', style: 'width: 25px;'), '#', onclick: 'javascript:VIEW_MODEL.menuNavClick("help")'
+      .info{style: 'margin: 7px 0px 0px 10px;'}
+        #tile_info{style: 'float: left; font-size: 11px; padding: 0px; color: #ffffff;'}
+          %div
+            = link_to 'tile-info', '#', onclick: "javascript:VoyageX.Main.mapControl().showTileInfo();", class: 'menu_link'
+          %div
+            %span#zoom_level
+        #cache_info{style: 'float: left; font-size: 11px; padding: 0px; color: #ffffff;'}
+          %span#cache_ctrls{style: 'float: left; margin-left: 10px;'}
+            = link_to 'Clear Cache', '#', onclick: "javascript:APP.clearCache();", class: 'menu_link'
+            \/
+            = link_to 'Show Cache', "filesystem:#{request.env['rack.url_scheme']}://#{request.env['HTTP_HOST']}/persistent/", class: 'menu_link'
+          %br
+          %div
+            %span#cache_stats{style: 'margin-left: 10px;'}
+        #cache_debug{style: 'float: left; font-size: 11px; padding: 0px 0px 0px 10px; color: #ffffff;'}
+          %div
+            = link_to 'toggle-dbg-pred', '#', onclick: "javascript:APP.togglePredictionPathDebug();", class: 'menu_link', id: 'dbg_pred_ctrl'
+          %div
+            = link_to 'hide-pred-paths', '#', onclick: "javascript:APP.clearPredictionPaths();", class: 'menu_link'
+        #tile_provider{style: 'float: left; font-size: 11px; padding: 0px 0px 0px 10px; color: #ffffff;'}
+          %div
+            = link_to 'tile-provider', '#', onclick: "javascript:APP.setProvider(window.prompt('Choose ProviderName from http://leaflet-extras.github.io/leaflet-providers/preview/', 'Esri.WorldImagery'))", class: 'menu_link'
+          %div
+            = link_to 'tile-mapnik', '#', onclick: "javascript:APP.setProvider('OpenStreetMap.Mapnik')", class: 'menu_link'
+        #network_state_view{style: 'float:right; color: white; margin-top: -10px; padding: 0px;'}
+          %div{style: 'height: 15px; font-size: 9px;'}
+            = radio_button_tag 'network_state', 'online', true, onclick: 'APP.toggleNetworkState(this)'
+            = label_tag 'network_state_online', 'online'
+          %div{style: 'height: 15px; font-size: 9px;'}
+            = radio_button_tag 'network_state', 'offline', false, onclick: 'APP.toggleNetworkState(this)'
+            = label_tag 'network_state_offline', 'offline'

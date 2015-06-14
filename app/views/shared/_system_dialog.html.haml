@@ -1,0 +1,53 @@
+- if is_mobile
+  %div{id: 'system_message_popup', 'data-role' => 'popup'}
+    %a{href: '#', 'data-rel' => 'back', class: 'nav_popup_close ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right'}
+      Close
+    #system_message_as_popup
+
+#tmpl_system_dialog_container{style: 'display: none;'}
+  #tmpl_fullscreen_dialog{style: 'display: none;'}
+    %center
+      Fullscreen erlauben? Die Steuerung befindet sich im
+      = image_tag 'arrow-up-right_off.png', style: 'max-width: 35px; max-height; 70px;'
+      Panel
+      %br
+      %span{style: 'float: left;'}
+        .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'enable_fullscreen'}}
+          .ui-button-text
+            Yes
+      %span
+        .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'disable_fullscreen'}}
+          .ui-button-text
+            No
+
+  #tmpl_subscription_grant_request_dialog{style: 'display: none;'}
+    subscription_grant_request:
+    %div{style: 'float: left'}
+      %img{tmpl: {src: '{user_foto_url}'}, style: 'max-width: 35px !important;'}
+    %div
+      %span{style: 'float: left; padding: 0px 0px 0px 5px;'}
+        %a{href: '#', onclick: "javascript:APP.model().grantFollow(APP.storage().getUser({user_id}));"} grant
+      %span{style: 'padding: 0px 0px 0px 5px;'}
+        %a{href: '#', onclick: "javascript:APP.model().denyFollow(APP.storage().getUser({user_id}));"} deny
+
+  #tmpl_subscription_granted_dialog{style: 'display: none;'}
+    subscription_granted
+    %div{style: 'float: left'}
+      %img{tmpl: {src: '{user_foto_url}'}, style: 'max-width: 35px !important;'}
+    %div
+      %span{style: 'float: left; padding: 0px 0px 0px 5px;'}
+        %a{href: '#', onclick: "javascript:APP.showPeer(APP.storage().getUser({user_id}), {id: {lastLocationId}, lat: {lastLat}, lng: {lastLng}, address: '{lastAddress}'.trim()!='' ? '{lastAddress}' : null}, 'popup');"} show
+
+  #tmpl_peer_in_range_dialog{style: 'display: none;'}
+    peer_in_range
+    %div{style: 'float: left'}
+      %img{tmpl: {src: '{user_foto_url}'}, style: 'max-width: 35px !important;'}
+    %div
+      %span{style: 'float: left; padding: 0px 0px 0px 5px;'}
+        %a{href: '#', onclick: "javascript:APP.showPeer(APP.storage().getUser({user_id}), {id: {lastLocationId}, lat: {lastLat}, lng: {lastLng}, address: '{lastAddress}'.trim()!='' ? '{lastAddress}' : null}, 'popup');"} show
+
+  #tmpl_message_received_popup{style: 'display: none;'}
+    %span{style: 'color:black;'}
+      Message Received
+      %button{class: 'activate_chat'}
+        show

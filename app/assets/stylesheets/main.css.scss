@@ -1,0 +1,371 @@
+// Place all the styles related to the dummy controller here.
+// They will automatically be included in application.css.
+// You can use Sass (SCSS) here: http://sass-lang.com/
+
+a.menu_link {
+  font-size: 11px;
+  color: #9d9d9d;
+}
+a.menu_link:hover  {
+  color: #ffffff;
+  text-decoration: none;
+}
+a.menu_link.menu_ctrl_on {
+  color: #ff0000;
+  text-decoration: none;
+}
+
+#content {
+  width: 100%;
+}
+
+.whoami-img {
+  max-width: 150px;
+}
+
+#followings {
+  width: 50%;
+  border: 0;
+  cellspacing: 0;
+  cellpadding: 0;
+}
+
+.upload_comment {
+  font-size: 11px;
+}
+
+#content_chat {
+  width: 100%;
+}
+
+.chat_view {
+  font-size: 11px;
+  width: 100%;
+  overflow-y: scroll;
+  background-color: #c2c2c2;
+}
+
+.chat_input {
+  width: 100%;
+}
+
+.chat_message {
+  width: 70%;
+}
+
+.chat_message_me {
+  float: left;
+}
+
+.chat_message_other {
+  float: right;
+}
+
+.chat_message_sep {
+  width: 100%;
+  height: 0px;
+  margin: 0px;
+  padding: 0px;
+  color: #c2c2c2;
+  background-color: #c2c2c2;
+}
+
+#marker_controls {
+  width: 200px;
+  height: 25px;
+  padding: 0px 0px 5px 0px;
+}
+
+.bc_controls {
+  width: 15px !important;
+  float: left;
+  height: 100%;  
+}
+
+.p2p_chat_container {
+  width: 200px; 
+  height: 235px; 
+}
+
+.p2p_chat_view {
+  font-size: 11px;
+  width: 100%;
+  height: 200px !important; 
+  overflow-y: scroll;
+  background-color: #c2c2c2;
+}
+
+.p2p_chat_input {
+  width: 100%;
+}
+
+.p2p_controls {
+  height: 30px !important;
+  padding: 2px;
+}
+
+.poi_controls {
+  height: 30px !important;
+  padding: 2px;
+  text-align: center; 
+}
+
+.controls_sep {
+  width: 100%;
+  height: 1px;
+  margin: 0px;
+  padding: 0px;
+  color: #c2c2c2;
+  background-color: #c2c2c2;
+}
+
+.note_editor {
+  width: 100%;
+  min-width: 200px;
+  min-height: 150px;
+}
+
+.radar_editor {
+  width: 100%;
+  min-width: 200px;
+  min-height: 100px;
+}
+
+.no-close .ui-dialog-titlebar-close {
+  display: none;
+}
+
+#context_nav_panel {
+  margin: 0px !important;
+  padding: 0px !important;
+}
+
+#attachment_view_panel {
+  text-align: center;
+  vertical-align: middle;
+  margin: 0px !important;
+  padding: 0px !important;
+}
+
+#attachment_view {
+}
+
+.swiper-pagination-switch {
+  background-color: #444444 !important;
+}
+
+.swiper-slide {
+  height:100%;
+  opacity:0.4;
+  -webkit-transition:300ms;
+  -moz-transition:300ms;
+  -ms-transition:300ms;
+  -o-transition:300ms;
+  transition:300ms;
+}
+.swiper-slide-active {
+  opacity:1;
+}
+.pagination {
+  position:absolute;z-index:20;left:10px;bottom:10px;
+}
+.swiper-pagination-switch {
+  display:inline-block;
+  width:8px;
+  height:8px;
+  border-radius:8px;
+  background:#222;
+  margin-right:8px;
+  opacity:0.8;
+  border:1px solid #fff;
+  cursor:pointer;
+}
+.swiper-visible-switch {
+  background:#aaa;
+}
+.swiper-active-switch {
+  background:#fff;
+}
+
+#content_uploads {
+  padding: 10px 0px 0px 0px;
+}
+
+#video_viewer {
+  float: left;
+  margin: 0px 20px 0px 0px;
+}
+
+#video_snapshot {
+/*
+  float: right;
+*/
+  margin: 0px 0px 0px 20px;
+}
+
+.seethrough_panel {
+  opacity: 0.8;
+  filter: alpha(opacity=80); /* For IE8 and earlier */
+  /* left: 0px !important; */
+}
+
+.ctrls_bar {
+  vertical-align: center;
+}
+
+.leaflet-popup-content {
+  margin: 20px 0px 0px 0px !important;
+}
+
+/*
+#poi_notes_container {
+    width: 140px;
+    height: 200px;
+    border: 1px solid #ccc;
+    .pcn-scrollbar {
+        width: 10px;
+        margin: 4px;
+        background-color: #ccc;
+        cursor: pointer;
+
+        .pcn-thumb {
+            background-color: #aaa;
+        }
+    }
+    .pcn-scrollbar.active {
+        .pcn-thumb {
+            background-color: #999;
+        }
+    }
+}
+*/
+
+/* ============================================================================================================================
+== BUBBLE WITH A BORDER AND TRIANGLE
+** ============================================================================================================================ */
+
+/* THE SPEECH BUBBLE
+------------------------------------------------------------------------------------------------------------------------------- */
+
+.triangle-border {
+  position:relative;
+  padding:7px;
+  margin:2px;
+  border:3px solid #5a8f00;
+  color:#333;
+  background:#fff;
+  /* css3 */
+  -webkit-border-radius:10px;
+  -moz-border-radius:10px;
+  border-radius:10px;
+}
+
+/* Variant : for left positioned triangle
+------------------------------------------ */
+
+.triangle-border.left {
+  margin-left:30px;
+}
+
+/* Variant : for right positioned triangle
+------------------------------------------ */
+
+.triangle-border.right {
+  margin-right:30px;
+}
+
+/* THE TRIANGLE
+------------------------------------------------------------------------------------------------------------------------------- */
+
+.triangle-border:before {
+  content:"";
+  position:absolute;
+  bottom:-20px; /* value = - border-top-width - border-bottom-width */
+  left:40px; /* controls horizontal position */
+  border-width:20px 20px 0;
+  border-style:solid;
+  border-color:#5a8f00 transparent;
+  /* reduce the damage in FF3.0 */
+  display:block;
+  width:0;
+}
+
+/* creates the smaller  triangle */
+.triangle-border:after {
+  content:"";
+  position:absolute;
+  bottom:-13px; /* value = - border-top-width - border-bottom-width */
+  left:47px; /* value = (:before left) + (:before border-left) - (:after border-left) */
+  border-width:13px 13px 0;
+  border-style:solid;
+  border-color:#fff transparent;
+  /* reduce the damage in FF3.0 */
+  display:block;
+  width:0;
+}
+
+/* Variant : top
+------------------------------------------ */
+
+/* creates the larger triangle */
+.triangle-border.top:before {
+  top:-20px; /* value = - border-top-width - border-bottom-width */
+  bottom:auto;
+  left:auto;
+  right:40px; /* controls horizontal position */
+  border-width:0 20px 20px;
+}
+
+/* creates the smaller  triangle */
+.triangle-border.top:after {
+  top:-13px; /* value = - border-top-width - border-bottom-width */
+  bottom:auto;
+  left:auto;
+  right:47px; /* value = (:before right) + (:before border-right) - (:after border-right) */
+  border-width:0 13px 13px;
+}
+
+/* Variant : left
+------------------------------------------ */
+
+/* creates the larger triangle */
+.triangle-border.left:before {
+  top:3px; /* controls vertical position */
+  bottom:auto;
+  left:-27px; /* value = - border-left-width - border-right-width */
+  border-width:13px 27px 11px 0;
+  border-color:transparent #5a8f00;
+}
+
+/* creates the smaller  triangle */
+.triangle-border.left:after {
+  top:6px; /* value = (:before top) + (:before border-top) - (:after border-top) */
+  bottom:auto;
+  left:-20px; /* value = - border-left-width - border-right-width */
+  border-width:9px 21px 9px 0;
+  border-color:transparent #fff;
+}
+
+/* Variant : right
+------------------------------------------ */
+
+/* creates the larger triangle */
+.triangle-border.right:before {
+  top:3px; /* controls vertical position */
+  bottom:auto;
+  left:auto;
+  right:-27px; /* value = - border-left-width - border-right-width */
+  border-width:13px 0 11px 27px;
+  border-color:transparent #5a8f00;
+}
+
+/* creates the smaller  triangle */
+.triangle-border.right:after {
+  top:6px; /* value = (:before top) + (:before border-top) - (:after border-top) */
+  bottom:auto;
+  left:auto;
+  right:-20px; /* value = - border-left-width - border-right-width */
+  border-width:9px 0 9px 21px;
+  border-color:transparent #fff;
+}
+

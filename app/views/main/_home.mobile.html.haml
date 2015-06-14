@@ -1,0 +1,50 @@
+%fieldset.upload_source_select{data: {role: 'controlgroup', type: 'horizontal'}}
+  %input{type: 'radio', id: 'home_administration', name: 'home', value: 'administration', checked: true, onclick: 'GUI.toggleHomeTab(this)'}
+  = label_tag 'home_administration', 'Administration'
+  %input{type: 'radio', id: 'home_stats', name: 'home', value: 'stats', onclick: 'GUI.toggleHomeTab(this)'}
+  = label_tag 'home_stats', 'Stats'
+  %input{type: 'radio', id: 'home_help', name: 'home', value: 'help', onclick: 'GUI.toggleHomeTab(this)'}
+  = label_tag 'home_help', 'Help'
+.messages
+  #upload_error
+  #upload_message
+  #upload_progress
+#administration
+  %div{style: 'float :left; padding: 13px 0px 13px 0px;'}
+    %span#whoami_img_container
+      %span#whoami_img_edit{style: 'display: none'}
+      %span#whoami_img_nedit
+    #user_foto_input_container{style: 'display:none;'}
+      = render partial: '/users/foto.mobile', locals: {user: tmp_user()}
+    %br
+    %span#whoami_form{style: 'display: none'}
+      - @_details = [:username]
+      = render('/users/edit_details')
+    %span#whoami_edit
+    %span#whoami_nedit{style: 'display: none'}
+  .auth_ctrl{style: 'float: left; padding: 10px 0px 0px 5px;'}
+    .logout-link{style: "display: #{user_signed_in? ? 'block' : 'none'}; padding: 13px 0px 0px 0px;"}
+      = link_to t('auth.sign_out'), destroy_user_session_path, style: 'margin-left: 20px;', data: { remote: "true", format: :js, method: :delete }
+    #sign_up_or_in{style: "display: #{user_signed_in? ? 'none' : 'inline'};"}
+      - popup_params = { data: { rel: 'popup', 'position-to' => 'window', 'data-role' => 'button' } }
+      .login-link
+        = link_to t('auth.sign_in'), '#sign_in_modal', popup_params
+      %br
+      .reg-link
+        = link_to t('auth.sign_up'), '#sign_up_modal', popup_params
+      - if Rails.env.to_sym == :development || true
+        %br
+        .omniauth-links
+          .button.facebook_login
+            -# , origin: "#{request.env['rack.url_scheme']}://#{request.env['HTTP_HOST']}#{request.env['REQUEST_URI']}"
+            = link_to "#{user_omniauth_authorize_path(:facebook)}#c=" do
+              = image_tag 'facebook-icon.png', style: 'width: 25px; height: 25px;'
+  #lang_select{style: 'float: right;'}
+    - lcls = lang_change_links request, ['c']
+    %div{style: 'margin: 10px 10px 0px 0px;'}
+      = link_to image_tag("en.png", style: "border-width:0px;width:30px;height:20px;"), '#', onclick: "javascript:document.location.href=VIEW_MODEL.linkForView('#{lcls[0]}', 'en', '#{lcls[1]}');", :style => "color:#00dd;"
+    %br
+    %div{style: 'margin: 5px 10px 0px 0px;'}
+      = link_to image_tag("de.png", style: "border-width:0px;width:30px;height:20px;"), '#', onclick: "javascript:document.location.href=VIEW_MODEL.linkForView('#{lcls[0]}', 'de', '#{lcls[1]}');", :style => "color:#00dd;"
+  = render partial: '/users/settings.mobile'
+= render partial: '/main/stats.mobile'

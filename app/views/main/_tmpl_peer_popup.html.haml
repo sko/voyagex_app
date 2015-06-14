@@ -1,0 +1,31 @@
+#tmpl_peer_popup{style: 'display: none;'}
+  -#%div{tmpl: {id: 'peer_popup'}}
+  %div{tmpl: {id: 'peer_popup_{peer_id}'}}
+    .p2p_controls
+      %hr.controls_sep
+      %div{style: 'width: 150px !important; height: 25px; padding: 0px 0px 5px 0px;'}
+        %div{style: 'float: left; margin: 0px 0px 0px 5px;'}
+          %img{tmpl: {src: '{peer_foto_url}'}, style: 'max-height: 25px !important; max-width: 35px !important;'}
+        %div{style: 'float: left; margin: 0px 0px 0px 5px;'}
+          = link_to image_tag('p2p-chat.png', style: 'height: 25px;', title: t('peers.chat'), alt: t('peers.chat')), '#', onclick: 'javascript:APP.view().openP2PChat(APP.storage().getUser({peer_id}))'
+        %div{style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+          %span{id: 'trace-ctrl-start-{peer_id}'}
+            = link_to image_tag('start_trace.png', style: 'height: 25px;', title: 'start-trace-{peer_name}', alt: 'start-trace-{peer_name}'), '#', onclick: "javascript:APP.toggleTrace(APP.storage().getUser({peer_id}), {path_key})"
+          %span{id: 'trace-ctrl-stop-{peer_id}', style: 'display: none;'}
+            = link_to image_tag('stop_trace.png', style: 'height: 25px;', title: 'stop-trace-{peer_name}', alt: 'stop-trace-{peer_name}'), '#', onclick: "javascript:APP.toggleTrace(APP.storage().getUser({peer_id}), {path_key})"
+        %div{style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+          = link_to image_tag('add-note.png', style: 'height: 25px;', title: t('peers.add_note'), alt: t('peers.add_note')), '#', onclick: "javascript:APP.view().viewPeerNote(APP.storage().getUser({peer_id}))"
+        %div{style: 'float: left; margin: 0px 0px 0px 5px; padding: 0px;'}
+          = link_to image_tag('link-poi.png', style: 'height: 25px;', title: t('chat.prompt_poi_id'), alt: t('chat.prompt_poi_id')), '#', onclick: "javascript:APP.view().promptPoiLinkInput();"
+
+#tmpl_p2p_chat_container{style: 'display: none;'}
+  .p2p_chat_container
+    .p2p_chat_view
+    .p2p_chat_input
+      = form_tag '#', method: :post, remote: true
+      = text_area_tag :p2p_message, '', id: nil, 'tmpl-id' => 'p2p_message_{peer_id}', class: [:p2p_chat_input, :p2p_message]
+
+#tmpl_p2p_chat_msg{style: 'display: none;'}
+  .triangle-border.p2p_chat_msg{class: '{toggle}', tmpl: {toggle: 'left|right'}, style: 'vertical-align: top;'}
+    -#%img{tmpl: {src: '{foto_url}'}, style: 'float: left; max-width: 35px !important;'}
+    {message}

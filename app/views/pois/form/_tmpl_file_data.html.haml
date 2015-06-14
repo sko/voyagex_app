@@ -1,0 +1,6 @@
+%div{tmpl: {id: :upload_file_controls}}
+  = hidden_field_tag 'poi_note[text]', '', 'tmpl-id' => 'upload_comment_text'
+  %span{style: 'float: left;'}
+    = f.file_field 'file', 'tmpl-id' => 'fileupload', accept: UploadEntity::Mediafile::ACCEPTED_CONTENT_TYPES.join(',')
+  %button.show-page-loading-msg{tmpl: {id: 'upload_button'}, data: {type: 'json', theme: 'a', textonly: 'false', textvisible: 'true', msgtext: 'Loading'}}
+    #{t('uploads.upload').html_safe}

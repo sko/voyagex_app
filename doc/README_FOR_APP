@@ -1,0 +1,357 @@
+coffee-class-methods:
+grep -R "\s*[^:]\+:\s*([^>]\+>" app/assets/javascripts/view.js.coffee
+
+APP.storage().clearCache({tiles: false, poiNotes: true, users: true})
+
+pois are loaded when position is set
+sync data (pois and messages):
+1.1) POI ONLY: load over web - not signed in
+  -> Main registerCB (ready_notification)
+1.2) POI & MESSAGES: load over web - signed in
+  -> Main registerCB (ready_notification)
+
+2.1) load locally when offline - not signed in
+2.2) load locally when offline - signed in
+
+3.1) sign in - online
+3.2) NOT POSSIBLE: sign in - offline
+
+4.1) set Online when offline
+
+# different data-types can be uploaded
+uploadDataTypeHandler:
+  done (poi, newNote) -> called after 
+  saveData (saveDataCB) ->
+
+UPLOADS.upload (uploadDataTypeHandler)
+  model.savePoiNote (saveCB, doneCB)
+    # in savePoiNote we define afterQueueCB
+    afterQueueCB = function(qPoi, qNewPoiNote) {
+      doneCB(qPoi, qNewPoiNote);
+      if (APP.isOnline())
+        return APP.storage().uploadQueue(qPoi, qNewPoiNote);
+    saveCB (storeData.poi, storeData.poiNote, (APP.storage().storeUpload = saveCB)
+        uploadDataTypeHandler.saveData
+
+
+##########################
+map: iPhone 4: mob-resol: 320x500
+settings: iPhone 6: mob-resol: 375x600
+
+
+################################## find all mediafiles actually used in app
+grep -oR "[^ '\"]\\+\\.\\(png\\|gif\\|jpe\\?g\\|mp3\\|mpeg\\)" app/ | sed "s/^.\\+://" | sort
+
+
+################################## öffne Poi-Popup
+Main - showPOI: (poiId, poiNoteId) ->
+
+################################## öffne Poi-Create/Comment-Eingabe-Layer aus Poi-Marker
+Main - poiNoteControls: () ->
+
+################################## öffne Poi-Create/Comment-Eingabe-Layer aus Arbeistmarker
+Main - poiNoteInput()
+  TemplateHelper - poiNoteInputHtml
+
+
+Model - syncWithStorage
+  Model - _viewPoiNoteAttachment # deferredModeParams created
+    Model - attachmentUrl
+      Model - cacheAttachment # for poi_notes
+        Model - _loadReadyUserPhoto
+          Storage - storeUserPhoto
+            FileUtils - _storeAsFile
+
+
+Storage - getPoiNoteAttachment
+  Storage - _getPoiNoteAttachmentFile
+
+
+
+TemplateHelper - openPOINotePopup
+  TemplateHelper - poiNoteInputHtml
+
+replace: assets-preompile kate
+.+/assets/
+
+-[^.]+(\.[^.]+)$
+->
+\1
+
+google-scholar suche:
+gis preload algorithm
+
+
+all scroll -methods/logic should go from template-helper to view.
+
+bei allen backend-callbacks wo anschliessend gesichert wird nicht get (ausm cache) aufrufen
+
+_syncPoiNotes sichert und callback rendered startet rendering
+
+
+require 'factory_girl'
+FactoryGirl.load('spec/factories.rb')
+Capybara::Screenshot.screenshot_and_save_page
+
+RAILS_ENV=production rake assets:clobber      
+RAILS_ENV=production rake assets:precompile                         
+ruby script/create_manifest.rb
+ruby script/create_manifest.rb -m
+vi app/views/main/cache_entries.txt
+
+
+# faye needs a queue too RAILS_ENV=staging PIDFILE=./tmp/pids/resque-worker.pid BACKGROUND=yes QUEUE=post_commit rake environment resque:work
+RAILS_ENV=staging PIDFILE=./tmp/pids/resque-worker.pid BACKGROUND=yes TERM_CHILD=1 QUEUE=* rake environment resque:work
+RAILS_ENV=staging PIDFILE=./tmp/pids/resque-scheduler.pid BACKGROUND=yes rake resque:scheduler
+
+ps aux | grep resque
+resque_pids=`cat ./tmp/pids/resque-scheduler.pid && echo -n " " && cat ./tmp/pids/resque-worker.pid`
+echo $resque_pids
+kill $resque_pids
+ps aux | grep resque
+
+#PIDFILE=./tmp/pids/resque-worker.pid BACKGROUND=yes QUEUE=* rake environment resque:work
+PIDFILE=./tmp/pids/resque-worker.pid BACKGROUND=yes TERM_CHILD=1 QUEUE=* rake environment resque:work
+PIDFILE=./tmp/pids/resque-scheduler.pid BACKGROUND=yes rake resque:scheduler
+
+# debug: run in foreground
+#PIDFILE=./tmp/pids/resque-worker.pid QUEUE=post_commit rake environment resque:work
+
+
+################# sync map-centers
+
+APP.map().panTo([52.4991249010282, 13.418726921081543])
+
+
+################# create comm_ports
+
+User.where('sign_in_count >= 1').each{|u|CommPort.create(user: u, channel_enc_key: enc_key, sys_channel_enc_key: enc_key)}
+
+
+################# cleanup fotos
+Dir.glob(Rails.root.join('public', 'assets', 'fotos', 'user_*')).each {|f|FileUtils.rm_rf(f) unless User.where(id: f.match(/([0-9]+)$/)[1]).first.present?}
+
+
+################# create fotos
+User.where('sign_in_count >= 1').each{|u|u.update_attribute(:foto, open(UserHelper::fetch_random_avatar, allow_redirections: :safe){|t|t.base_uri}) unless u.foto.exists?}
+
+# single
+User.where('username = ?', 's.koeller').each{|u|u.update_attribute(:foto, open(UserHelper::fetch_random_avatar, allow_redirections: :safe){|t|t.base_uri})}
+User.where('username = ?', 't.schuemmer').each{|u|u.update_attribute(:foto, open(UserHelper::fetch_gravatar(u.email), allow_redirections: :safe){|t|t.base_uri})}
+
+
+################# set gravatar-foto
+User.where('username = ?', 'stephan').each{|u|u.update_attribute(:foto, open(UserHelper::fetch_gravatar(u.email), allow_redirections: :safe){|t|t.base_uri})}
+
+
+################# create snapshot-commits
+User.joins(:snapshot).where(user_snapshots: {commit_id: nil}).uniq.each{|u|u.snapshot.update_attribute(:cur_commit, Commit.latest)}
+
+
+plan:
+1) _cachePoiNote
+2) send ajax
+3) done: syncWithStorage
+
+currently:
+poi-notes are saved before upload but displayed after upload. this is ok since if upload doesn't work thea are stil displayed
+
+
+savePoiNote
+  # offline
+  _cachePoiNote
+    (A) queueUpload
+      storeUpload
+        # files:
+        storePoiNoteAttachment
+          _syncPoiNotes
+            callback (afterUploadPhoto)
+        # embeds/text
+        _syncPoiNotes
+          callback (afterUploadPhoto)
+            addPoiNotes
+  # online
+  syncWithStorage !!!!!!!
+    _syncPoiNotes
+      callback (afterUploadPhoto)
+        addPoiNotes
+
+syncWithStorage !!!!!!!
+ 1) _viewPoiNoteAttachment
+    # direct or via getPoiNoteAttachment (if file-api)
+    _getPoiNoteAttachmentFile
+      attachmentUrl
+        if APP.isOnline()
+          cacheAttachment
+            _loadReadyBlob
+              storePoiNoteAttachment
+                ...
+  2) _syncPoiNotes
+    ...
+
+_loadReadyImage
+  storePoiNoteAttachment
+    batchUpload
+      syncPoi
+        syncResponseCallback #### (here the ids are updated)
+          afterUploadPhoto (is orig-cb)
+            addPoiNotes
+
+
+
+setOnline
+  uploadQueue
+    _getPoiNoteAttachmentFile
+
+ _uploadsCB
+  setupPoiForNote
+  syncWithStorage !!!!!!!
+
+
+von wo aufgerufen:
+_syncPoiNotes
+  StorageController - storeUpload 
+  Model - syncWithStorage
+
+
+
+Use this README file to introduce your application and point to useful places in the API for learning more.
+Run "rake doc:app" to generate API documentation for your models, controllers, helpers, and libraries.
+
+
+
+Konzeption und Entwicklung einer Web-Anwendung für synchrone und asynchchrone kooperative Bearbeitung von interaktiven Karten
+
+
+==========
+Usecases
+==========
+benachrichtigungen:
+falls kein poi-popup offen dann usermarker-popup - sonst grünpfeil
+1: Interaktiv synchron.
++) ein user kommt in mein scan-umfeld
+-> eigene view mit allen derartigen benutzern?
+-> grünpfeil blinkt
+
+online-offline angeben!
+
++) ein user trägt einen poi ein.
+... benachrichtigung: 
+unterscheidung ob in der nähe oder ganz wo anders
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==========
+Concept
+==========
++) tour wie bei uscan ... mehrere pois verbinden
++) a la git: der ganze baum wird als dateisystem angelegt, jedes objekt ist ne datei. alles ist ein verzueichnis, auch comment. die eigenschaften werden in einer datei geschireben - entweder eine datei für alle oder für jede eigenschaft eine datei. wenn alle attrib8ute in einem file stehen muss an erster stelle auch die version stehen, bzw. der commit-hash
++) polymorphic wie bei whatsbetter, WhatsBetter::Comparable <=> Upload (also ändern), Content als entity von Upload.
+   aber: hilfsmethode file in upload: delegate!!!
++) bilder so wie werbung bei google auf map zuordnen: links liste (A,B,...), rechts karte mit Markern (uscan hat das auch)
+   TODO: wie läuft das bei googlemobile bzw. youtube
++) @thesis: i18n
++) internationalisierung
++) ab bestimmten zoom medialements einblenden - ja nach kartenbewegung die liste aktualisieren. (google-maps mit bilderanzeige)
++) bilder werden bewertet - die besten werden bei kleinerem zoom angezeigt.
++) jeder client baut nen eignenen channel auf mit seiner verschlüsselten id
++) best practises
++) man sieht die bilder im umkreis von 50 km
++) der rest ist GIT commit/push - abgrenzung zur versionscontrolle. limit on history, keine branches.
+   mein master mit online master.
++) aber online können auch nebenläufigkeiten bestehen.
+   die bas sind alle einträge. also versionskontrolle pro eintrag, ein eintrag ist ein file. jsoon kan man aber zerschiesen+
++) Objekt-basierte Versionierung
++) rebase!!!!!
++) friends-panel neben pois-preview (photo-upload): freunde in der nähe
+
++) fast alles was in javascript initial geladen werden soll kommt in layouts/_init_js
+  es sei denn es gibtspzialfall (peers/subscriptions)
+
+flacher baum.
+
+
+hier: objekt-semantik ist statisch - es ginbt bestimmte attribute und die ändern sich nicht.
+abhängigkeiten können sequentiell serialisierbar sein
+
+keine komma, ProtoBuffer
+key value immer auf einer zeile
+v1:
+a{
+b: null
+comments[
+]
+}
+v2:
+a{
+b: null
+comments[
+d[i=0]: null
+e[i=1]: null
+c[i=2]: null
+]
+}
+
+v3:
+a{
+b: null
+comments[
+d[i=0]: null
+e[i=1]: 
+[
+]
+c[i=2]: null
+]
+}
+
+einer löscht e, anderer bearbeitet es
+i immer unveränderlch
+
+appendonly
+
+bei chat werden listen länger, ich kann auf einen beitrag antworten aber nicht stele aussuchen
+so gesehen ist i lokal temporär,
+
+
+==========
+Pragmatic Diary
+==========
++) form wird unsichtbar wenn sie nach openmaps eingebunden wird. $('form') !!!
+die ursache kann man suchen - muss man aber auch nicht. gefahr wenn nicht: das es irgendwann mal unerwartet nicht geht.
+alternativ: tests schreiben die immer alle forms suchen.
+
++) coffeescript
+      if MediaStreamTrack.getSources is 'undefined'
+      if MediaStreamTrack? && `MediaStreamTrack.getSources !== undefined`
++) # next statement removes value from inputs!!
+  $("#network_state").buttonset()
+
+
+==========
+Devise
+==========
+rails generate devise:install
+

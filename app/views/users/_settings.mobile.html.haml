@@ -1,0 +1,6 @@
+%div
+  = form_for tmp_user, remote: true, method: :patch, :html => { :id => "settings_form" } do |f|
+    .user_settings{style: 'padding: 0px 0px 20px 0px;'}
+      #comm_peer_data{style: 'padding: 20px 0px 30px 0px;'}
+        = render partial: '/shared/peers', locals: {user: tmp_user}
+      = f.submit 'Sichern', :class => "btn btn-sm"

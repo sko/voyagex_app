@@ -1,0 +1,58 @@
+unless window.VoyageX?
+  window.VoyageX = {}
+class window.VoyageX.Util
+
+  constructor: (isMobile) ->
+    window.UTIL = this
+    if isMobile
+      # if not set then jquery-mobil will add origin header to request -  causing No 'Access-Control-Allow-Origin' 
+      # $(document).on "mobileinit",  () ->
+      #     $.mobile.ajaxEnabled = false;
+      $.mobile.ajaxEnabled = false;
+
+  _meterToLatLng: (lat) ->
+    conv_factor = (2.0 * Math.PI)/360.0;
+    latRad = lat * conv_factor;
+
+    m1 = 111132.92
+    m2 = -559.82
+    m3 = 1.175
+    m4 = -0.0023
+    p1 = 111412.84
+    p2 = -93.5
+    p3 = 0.118
+    latlen = m1 + (m2 * Math.cos(2 * latRad)) + (m3 * Math.cos(4 * latRad)) + (m4 * Math.cos(6 * latRad))
+    longlen = (p1 * Math.cos(latRad)) + (p2 * Math.cos(3 * latRad)) + (p3 * Math.cos(5 * latRad))
+    { meterLat: 1.0 / latlen, meterLng: 1.0 / longlen}
+
+  padTextHtml: (text, minLength) ->
+    count = 0
+    while text.length < minLength
+      count += 1
+      text += if count%5==0 then ' ' else '.'
+    text.replace(/([ .]+)$/, ' <span style="color:white;">$1</span>')
+
+  trimPosVal: (latOrLng) ->
+    Math.round(latOrLng*10000000)/10000000
+
+  searchBounds: (lat, lng, radiusMeters) ->
+    if radiusMeters <= 0
+      return null
+
+    meterLatLng = this._meterToLatLng lat
+
+    diameterLat = meterLatLng.meterLat * radiusMeters
+    diameterLng = meterLatLng.meterLng * radiusMeters
+    inner_square_half_side_length_lat = Math.sqrt((2*diameterLat)**2) / 2
+    inner_square_half_side_length_lng = Math.sqrt((2*diameterLng)**2) / 2
+    
+    { lng_west: this.trimPosVal(lng-inner_square_half_side_length_lng),\
+      lng_east: this.trimPosVal(lng+inner_square_half_side_length_lng),\
+      lat_south: this.trimPosVal(lat-inner_square_half_side_length_lat),\
+      lat_north: this.trimPosVal(lat+inner_square_half_side_length_lat) }
+
+  withinSearchBounds: (lat, lng, searchBounds) ->
+    lat >= searchBounds.lat_south && lat <= searchBounds.lat_north &&
+    lng >= searchBounds.lng_west && lng <= searchBounds.lng_east
+
+new VoyageX.Util IS_MOBILE

@@ -1,0 +1,22 @@
+server {
+	listen   80; ## listen for ipv4
+#	listen   [::]:80 default ipv6only=on; ## listen for ipv6
+
+	server_name  voyagex.info.tm;
+	
+#	passenger_sticky_sessions on; # ? required for websocket-support - doesn't seem so
+	passenger_app_env production;
+	passenger_enabled on; 
+	passenger_ruby /home/sko/.rvm/wrappers/ruby-2.1.5/ruby;
+	root /home/sko/voyage_x/public; 
+
+	access_log  /var/log/nginx/voyagex_info_tm.access.log;
+
+  location /comm {
+    proxy_pass http://localhost:3000/comm;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+	  proxy_set_header Host $host;
+  }
+}

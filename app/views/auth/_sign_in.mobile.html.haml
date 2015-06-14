@@ -1,0 +1,10 @@
+#sign_in_modal{data: {role: 'popup', 'overlay-theme' => 'a', theme: 'a'}}
+  %div{data: {role: 'header'}}
+    %h4.ui-title #{t('auth.sign_in')}
+    %p#sign_in_flash
+  %div{role: 'main'}
+    = form_for(resource, as: resource_name, url: session_path(resource_name), :remote => true, :format => :js, :html => {id: 'new_session', :class => "form-signin"}) do |f|
+      = f.email_field :email, id: 'auth_email', :autofocus => true, :label => false, :class => 'form-control', :placeholder => "Email", autocomplete: "off"
+      = f.password_field :password, id: 'auth_password', :label => false, :class => 'form-control', :placeholder => "Password", autocomplete: "off"
+      %a{ id: 'sign_in_cancel', :href => "#", :class => "btn btn-sm", data: { role: 'button', rel: 'back' } } #{t('cancel')}
+      = f.submit t('auth.sign_in'), :class => "btn btn-sm"

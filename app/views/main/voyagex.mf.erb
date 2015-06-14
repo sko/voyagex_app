@@ -1,0 +1,13 @@
+CACHE MANIFEST
+
+CACHE:
+<%= render file: "/main/cache_entries#{Rails.env.to_sym == :development ? '_development' : ''}#{is_mobile ? '.mobile' : ''}.txt" -%>
+#/csrf
+
+NETWORK:
+*
+#/users/sign_in
+#/users/sign_out
+#/users/auth
+#/users/auth/facebook
+#https://www.facebook.com/dialog/oauth

@@ -1,0 +1,1141 @@
+<% environment.context_class.instance_eval { include Rails.application.routes.url_helpers } %>
+
+class window.VoyageX.Main
+  
+  @_SINGLETON = null
+  @_BACKEND = null
+  @_STORAGE_CONTROLLER = null
+  @_MAP_CONTROL = null
+  @_MARKER_MANAGER = null
+  @_PATH_PREDICTION = null
+  @_CHAT_CONTROL = null
+  @_COMM_CHANNELS = ['system', 'talk', 'map_events', 'pois', 'radar']
+  @_STORAGE_MODEL = null
+  @_UPLOAD_HELPER = null
+  @_USER_MANAGER = null
+  @_MEDIA_MANAGER = null
+
+  constructor: (mapOptions, offlineZooms, online) ->
+    Main._SINGLETON = this
+    window.APP = this
+    @_debug = false
+    @_version = new VoyageX.Version [0, 1]
+    @_initState = 0
+    @_online = online
+    @_navigatorOnline = @_online
+    @_view = new VoyageX.View()
+    @_comm = null
+    @_realPosition = {lat: -1.0, lng: -1.0}
+    @_realPositionWatch = null
+    @_moveSensorDistMeters = 25
+    @_selectedPosition = {lat: -1.0, lng: -1.0, address: null}
+    @_curPOI = null
+    #@_initPoisOnMap = []
+    Main._STORAGE_MODEL = new Storage.Model()
+    Main._UPLOAD_HELPER = new VoyageX.Uploads()
+    Main._USER_MANAGER = new VoyageX.Users()
+    new VoyageX.ClientState 'map', { create: () ->
+        new VoyageX.Gui()
+      }
+    Main._MEDIA_MANAGER = new VoyageX.MediaManager()
+    @_cacheStrategy = null
+    window.addEventListener "offline", (e) ->
+        console.log 'Main: went offline ...'
+        VoyageX.Main._BACKEND._state.pingActive &&= false
+        VoyageX.Main._BACKEND._state.online &&= false
+        APP.setOffline()
+      , false
+    window.addEventListener "online", (e) ->
+        console.log 'Main: went online ...'
+        APP.setOnline()
+      , false
+    #window.applicationCache.addEventListener "error", (e) ->
+    #    alert("Error fetching manifest: a good chance we are offline")
+    # at first the map need's to be initialized ...
+    $(document).ready () ->
+        APP._init mapOptions, offlineZooms, window.VoyageX.TILE_HANDLER
+
+  # +) _init is called when starting the client-app, which can be either loaded from server via url or
+  #    loaded from app-cache when opened in offline-mode
+  # +) _init is called more than once due to asynchronous initialisation of some components, for which
+  #    a ready-callback from browser is awaited before being usable/accessible (f.ex. file-system)
+  _init: (mapOptions, offlineZooms, tileHandler = null) ->
+    APP._initState += 1
+    switch APP._initState
+      when 1
+        # the app depends on a ready-usable storage-component
+        Main._STORAGE_CONTROLLER = new Comm.StorageController(initLocation, (initError) ->
+            console.log 'StorageController initialized with message: '+(if initError then 'FAILED' else 'OK')
+            APP._init mapOptions, offlineZooms, tileHandler
+          )
+      when 2
+        Main._BACKEND = new VoyageX.Backend (isOnline) ->
+            APP._online = isOnline
+            APP._init mapOptions, offlineZooms, tileHandler
+      when 3
+        curU = APP.user()
+        if APP.signedIn curU
+          channelEncKey = curU.peerPort.channel_enc_key
+          sysChannelEncKey = curU.peerPort.sys_channel_enc_key
+          # re-init user-state 
+          # don't overwrite last location when reloading offline from app-cache ...
+          Main._STORAGE_CONTROLLER.env (env) ->
+            unless env.volatileFlags.userInitialized?
+              userData = {id: curU.id}
+              if curU.curCommitHash != initCommitHash
+                userData.dirty = true
+                userData.curCommitHash = initCommitHash
+              if curU.lastLocationId != initLocation.id
+                userData.dirty = true
+                userData.lastLocationId = initLocation.id
+              if userData.dirty?
+                console.log 'APP - _init: resetting user ...'
+                delete userData.dirty
+                Main._STORAGE_CONTROLLER.saveUser userData
+                #env.volatileFlags.userInitialized = { lastLocation: true, curCommitHash: true }
+                env.volatileFlags.userInitialized = { reset: Math.round(Date.now()/1000)}
+          # reload since env might have changed
+          curU = APP.user()
+          mapOptions.center = new L.LatLng(curU.getLastLocation().lat, curU.getLastLocation().lng)
+        else
+          channelEncKey = null
+          sysChannelEncKey = null
+          mapOptions.center = new L.LatLng(initLocation.lat, initLocation.lng)
+        # Communication initialisation (Faye-Client) needs to be done before MapControl since MC already
+        # publishes messages. no problem if MC publishes before comm is ready (register) since messages
+        # are queued ...
+        APP._comm = new Comm.Comm([['/talk', APP._talkCB, channelEncKey],
+                                   ['/map_events', APP._mapEventsCB, channelEncKey],
+                                   ['/pois', APP._poisCB, channelEncKey],
+                                   ['/radar', APP._radarCB, channelEncKey]],
+                                   sysChannelEncKey,
+                                   APP._systemCB,
+                                   Main._BACKEND.commConnStateCB)
+        APP._cacheStrategy = new VoyageX.CacheStrategy true
+        # Map initialisation (LeafletJS)
+        mapReadyCB = (map) ->
+            #  disable this if using geolocation on startup (some lines further down)
+            Main._MARKER_MANAGER = new VoyageX.MarkerManager map
+            curU = APP.user()
+            initLoc = (if curU? then curU.getLastLocation() else null)||window.initLocation
+            APP._initPositionCB { coords: { latitude: initLoc.lat, longitude: initLoc.lng } }
+            #
+            # maybe store current-environment-tiles even with _pathPrediction
+            #
+            #APP._cacheStrategy._pathPrediction = true
+            #Main._MARKER_MANAGER = new VoyageX.MarkerManager APP.map()
+            if false && APP.isOnline()
+              if Comm.StorageController.isFileBased()
+                x = parseInt(MC._map.project(MC._map.getCenter()).x/256)
+                y = parseInt(MC._map.project(MC._map.getCenter()).y/256)
+                view = {zoom: MC._map.getZoom(), tile: {column: x, row: y}, subdomain: MC._mapOptions.subdomains[0]}
+                deferredModeParams = VoyageX.MapControl.deferredModeParams view, {default: true}
+                ((dMPs, origCB) ->
+                    dMPs.fileStatusCB = (deferredModeParams, created) ->
+                      console.log 'breakpoint to check deferredModeParams'
+                      origCB deferredModeParams, created
+                )(deferredModeParams, deferredModeParams.fileStatusCB)
+                MC._prefetchArea view, curU.searchRadiusMeters
+                # TODO - replace tile-images-src with cache-url
+                # solution #1
+                # $('#map > .leaflet-map-pane > .leaflet-tile-pane .leaflet-tile-container:parent > .leaflet-tile').not('[src]').each () ->
+                #     left = parseInt $(this).attr('style').match(/left:\s*(-?[0-9]+)/)[1]
+                #     top = parseInt $(this).attr('style').match(/top:\s*(-?[0-9]+)/)[1]
+                #     x = (MC._map.getPixelOrigin().x + left) / 256
+                #     y = (MC._map.getPixelOrigin().y + top) / 256
+                #     srcUrl = 'filesystem:http://ctrl.privatedns.org:3005/persistent/'+MC._map.getZoom()+'/'+x+'/'+y+''
+                #     $(this).attr('src', srcUrl)
+        Main._MAP_CONTROL = new VoyageX.MapControl mapOptions, offlineZooms, APP._cacheStrategy, mapReadyCB, tileHandler
+        #Main._MARKER_MANAGER = new VoyageX.MarkerManager APP.map()
+        Main._PATH_PREDICTION = new VoyageX.PathPrediction Main._MAP_CONTROL
+        Main._CHAT_CONTROL = new VoyageX.ChatControl()
+        #  if enable geolocation then disable mapReadyCB-location-setting (some lines further up)
+        # if navigator.geolocation 
+        #   navigator.geolocation.getCurrentPosition(APP._initPositionCB, (error) ->
+        #       #alert('geolocation timed out - manual selection required.\nsetting default location...')
+        #       curU = APP.user()
+        #       initLoc = curU.getLastLocation()||window.initLocation
+        #       APP._initPositionCB { coords: { latitude: initLoc.lat, longitude: initLoc.lng } }
+        #   , { enableHighAccuracy: true, timeout : 5000 })
+        # new VoyageX.ClientState 'map', { create: () ->
+        #     new VoyageX.Gui()
+        #   }
+        if GUI.isMobile()
+          # if not set then jquery-mobil will add origin header to request -  causing No 'Access-Control-Allow-Origin' 
+          #$.mobile.ajaxEnabled = false
+          # $('#system_dialog_panel').html VoyageX.TemplateHelper._updateIds('tmpl_fullscreen_dialog')
+          # $('#open_system_dialog_btn').click()
+          GUI.showSystemMessage (systemMessageDiv) ->
+              systemMessageDiv.html VoyageX.TemplateHelper._updateIds('tmpl_fullscreen_dialog')
+            #, {w: 100, h: 50}
+          #Main._MAP_CONTROL.reload()
+          $('#panel_control').draggable({
+#              start: (event, ui) ->
+#                  console.log('dragging ...')
+#              ,
+#              drag: (event, ui) ->
+#                  console.log('dragging ...')
+            })
+#          $( "#panel_control" ).on( "dragcreate", (event, ui) ->
+#                  console.log('dragging ...')
+#            )
+          GUI.showActiveState($('#menu_top button.activate_map'))
+        else
+          GUI.showActiveState()
+        $('#zoom_level').html('<span style="color:white;">zoom: '+APP.map().getZoom()+'</span>')
+        # next statement removes value from inputs!!
+        #$("#network_state").buttonset()
+        $('button[value=camera]').focus()
+        APP._zoomEnd(null)
+        APP.view().cacheStats()
+        $('#user_foto_input_type').buttonset()
+        $('#poi_notes_container').scrollpanel({
+            prefix: 'pcn-'
+          })
+        $('#clear_cache').click () ->
+          APP.clearCache()
+
+  user: () ->
+    APP.storage().getCurrentUser()
+
+  userId: () ->
+    curU = APP.user()
+    if curU? then curU.id else -1
+
+  userName: () ->
+    curU = APP.user()
+    if curU? then curU.username else null
+
+  signedIn: (curU = APP.user()) ->
+    curU? && curU.peerPort? && curU.peerPort.channel_enc_key?
+
+  register: () ->
+    Main._BACKEND.register (curU) ->
+        unless curU.lastLocation.id?
+          curU.lastLocation.id = -curU.id
+        poiId = curU.lastLocation.poiId
+        if poiId?
+          APP.storage().saveLocation curU.lastLocation, {poi: {id: poiId}}
+        else
+          APP.storage().saveLocation curU.lastLocation
+        isSignedIn = APP.storage().getCurrentUser()? && APP.signedIn(curU)
+        curU.lastLocationId = curU.lastLocation.id
+        delete curU.lastLocation
+        APP.storage().saveCurrentUser curU
+        # APP.refreshUserPhoto curU, null, (user, flags) ->
+        #     APP.view().setupForCurrentUser()
+        # # only if signedIn?
+        # Storage.Model.instance().loadUsers (peer, idx, numPeers) ->
+        #     APP.initUser peer
+        #   , -1
+        Comm.Comm.initSystemContext curU.peerPort.sys_channel_enc_key
+
+  syncPois: () ->
+    Main._BACKEND.curCommit (msg) ->
+        curU = APP.user()
+        if curU? && (curU.curCommitHash != msg.commit_hash)
+          APP.model().pullPois()
+          # queue is uploaded after pull -> @see _poisCB - upload.action == 'pull'
+        else
+          if APP.storage().hasQueue()
+            APP.storage().uploadQueue()
+        unless VoyageX.Main._BACKEND._state.pingActive
+          setTimeout "VoyageX.Main._BACKEND.pingBackend()", VoyageX.Backend._PING_CHECK_DELAY_MILLIS
+    #Comm.StorageController.instance()._tileLoadQueue = {}
+
+  isBackendOnline: () ->
+    navigator.onLine && VoyageX.Main._BACKEND.isOnline()
+
+  isOnline: () ->
+    if navigator.onLine
+      unless @_navigatorOnline
+        @_navigatorOnline = true
+        console.log 'Main - isOnline: navigator switched to on-line ...'
+        # TODO reload offline-cache files ...  remember them in array? until set data-attr
+        #APP.map().invalidateSize({
+        #    reset: true,
+        #    pan: false,
+        #    animate: false
+        #  })
+      @_online# && this.isBackendOnline()
+    else
+      if @_navigatorOnline
+        @_navigatorOnline = false
+        console.log 'Main - isOnline: navigator switched to off-line ...'
+      false
+
+  setOnline: () ->
+    @_online = true
+
+    this.syncPois()
+    APP.model().syncChatMessages()
+
+    Main._MAP_CONTROL._zooms.splice(0, Main._MAP_CONTROL._zooms.length)
+    for n in [Main._MAP_CONTROL._minZoom..Main._MAP_CONTROL._maxZoom]
+      Main._MAP_CONTROL._zooms.push n
+    
+    unless $('#network_state_online').prop('checked')
+      $('#network_state_online').prop('checked', true)
+    GUI.showActiveState()
+    setTimeout "APP.refreshMap()", 1500
+
+  setOffline: () ->
+    if @_online
+      @_online = false
+      Main._BACKEND._state.online &&= false
+      Main._BACKEND._state.pingActive &&= false
+      #Main._MAP_CONTROL._zooms.splice(0, Main._MAP_CONTROL._zooms.length)
+      MC._zooms.splice(0, MC._zooms.length)
+      for n in MC._offlineZooms
+        MC._zooms.push n
+      unless $('#network_state_offline').prop('checked')
+        $('#network_state_offline').prop('checked', true)
+      GUI.showActiveState()
+
+  toggleNetworkState: (selected) ->
+    if selected.id == 'network_state_online'
+      APP.setOnline()
+    else
+      APP.setOffline()
+
+  isMobile: () ->
+    GUI.isMobile()
+
+  # FIXME move to map_control
+  setProvider: (providerParts) ->
+    if providerParts? && (providerParts!='')
+      parts = providerParts.split('.')
+      provider = parts[0]
+      variant = parts[1]
+      VoyageX.TILE_URL_TEMPLATE = L.TileLayer.Provider.providers[provider].url.replace(/\{variant\}/, variant)
+      if L.TileLayer.Provider.providers[provider].options.ext?
+        VoyageX.TILE_URL_TEMPLATE = VoyageX.TILE_URL_TEMPLATE.replace(/\{ext\}/, L.TileLayer.Provider.providers[provider].options.ext)
+      #$(APP.map()._tilePane).find('.leaflet-layer').first().remove()
+      APP.map().removeLayer(VoyageX.Main.mapControl()._mapOptions.layers[0])
+      APP.storage().clearCache {tiles: true}
+      layer = L.tileLayer.provider(providerParts).addTo(APP.map())
+      VoyageX.Main.mapControl()._mapOptions.layers.splice 0, 1, layer
+
+  clearCache: () ->
+    Comm.StorageController.instance().clearCache()
+    if @_debug
+      Comm.StorageController.instance().clearCache {tiles: false, poiNotes: true, users: true}
+    APP.view().cacheStats()
+
+  refreshMap: () ->
+    #Comm.StorageController.instance()._tileLoadQueue = {}
+    APP.map()._resetView APP.map().getCenter(), APP.map().getZoom(), true
+
+  # user-marker-tools
+  # no text required but dummy-text (...) set for bookmark (locally only) - no text = delete
+  bookmarkLocation: (poiId = -1) ->
+    if poiId == -1
+      posLatLng = this.getSelectedPositionLatLng()
+      #APP.map().panTo(this.getSelectedPositionLatLng())
+    else
+      poi = APP.storage().getPoi poiId
+      locationData = APP.storage().getLocation poi.locationId
+      posLatLng = [locationData.lat, locationData.lng]
+    Storage.Model.instance().addBookmark posLatLng, (bookmark) ->
+        VoyageX.View.addBookmark bookmark
+        # set dummy-text to prevent deletion (after opening - not before close!)
+        textArea = $('#note_bookmark_'+bookmark.location.id)
+        bookmarkText = textArea.val().trim()
+        if bookmarkText == ''
+          textArea.val('...')
+
+  deleteBookmark: (poiId = -1) ->
+    markerMeta = APP.getOpenPopupMarker true
+    #if poiId == -1
+    if markerMeta.isUserMarker
+      contentId = 'marker_controls'
+    #else if markerMeta.peer?
+    #  `;`
+    else if markerMeta.poi?
+      contentId = 'poi_notes_container'
+    
+    noteEditor = $('#'+contentId).parent().find('.note_editor').first()
+    textArea = noteEditor.find('textarea')
+    textArea.val('')
+
+    #@see Main._checkSaveNote contentId, markerMeta
+    targetId = parseInt textArea.attr('id').match(/[0-9]+$/)[0]
+    console.log('_checkSaveNote: deleting note for location '+Comm.StorageController.instance().getLocation(targetId).address)
+    Storage.Model.instance().deleteNote 'bookmark', targetId
+    
+    markerMeta.target().closePopup()
+
+  deletePoi: (poiId, fromSyncCB = false) ->
+    poi = APP.storage().getPoi poiId
+    Storage.Model.instance().deletePoi poi, fromSyncCB, (poi) ->
+        if poi?
+          APP.markers().removeForPoi poi.id
+
+  deletePoiNote: (poiId, poiNoteId) ->
+    poi = APP.storage().getPoi poiId
+    Storage.Model.instance().deletePoiNote poi, poiNoteId, (poi) ->
+        APP.showPOI poi.id, null, true
+
+  # user-marker-tools
+  radarSettings: () ->
+    VoyageX.View.editRadar()
+
+  toggleWatchPosition: (state) ->
+    if state == 'on'
+      if navigator.geolocation 
+        navigator.geolocation.getCurrentPosition((position) ->
+              APP._initPositionCB position, null, true
+          , (error) ->
+              console.log 'error when trying to gps locate position: '+error
+          , { enableHighAccuracy: true, timeout : 5000 })
+      APP.watchRealPosition()
+    else
+      APP.stopRealPositionWatch()
+    APP.view().setRealPositionWatchedIcon state
+
+  toggleTrace: (user, pathKey) ->
+    path = APP.storage().getPath user, pathKey
+
+    if window.tTDblClick
+      isDoubleClick = true
+      if path?
+        APP.storage().stopTracePath user.id, path
+        APP.view().setTraceCtrlIcon user, marker, 'stop'
+      VoyageX.View.editTracePaths user
+      return true
+    else
+      window.tTDblClick = new Date().getTime()
+      setTimeout () ->
+          delete window.tTDblClick
+        , 500
+
+    marker = APP.getOpenPopupMarker true
+    if path?
+      APP.storage().stopTracePath user.id, path
+      APP.view().setTraceCtrlIcon user, marker, 'stop'
+    else
+      if user.id == APP.user().id 
+        position = {lat: APP._selectedPosition.lat, lng: APP._selectedPosition.lng}
+      else
+        position = {lat: marker.m.location().lat, lng: marker.m.location().lng}
+      APP.storage().startTracePath user.id, position
+      APP.view().setTraceCtrlIcon user, marker, 'start'
+
+  deleteTracePath: (user, pathKey) ->
+    APP.view().hideTracePath pathKey
+    APP.storage().deleteTracePath user.id, pathKey
+    $('#tp_e_'+pathKey).remove()
+
+  publishPosition: () ->
+    posLatLng = [@_selectedPosition.lat, @_selectedPosition.lng]
+    @_comm.send('/map_events', {type: 'click',\
+                                userId: APP.userId(),\
+                                lat: posLatLng[0],\
+                                lng: posLatLng[1]})
+    if APP.user()?
+      # on initialisation when users are deleted locally (reset) currentUser might be null on first call
+      path = APP.storage().getPath APP.user()
+      if path?
+        path = APP.storage().addToPath APP.user().id, @_selectedPosition, path
+        debugSmoothPath = false
+        if debugSmoothPath
+          VoyageX.Main.mapControl().drawSmoothPath APP.user(), path
+        else
+          VoyageX.Main.mapControl().drawPath APP.user(), path, true
+    $('#marker_controls').closest('.leaflet-popup').children('.leaflet-popup-close-button').click()
+
+  setHomeBase: () ->
+    #this.publishPosition false, null, true
+    Storage.Model.instance().setHomeBase @_selectedPosition.lat, @_selectedPosition.lng, (user) ->
+        curU = APP.user()
+        curU.homebaseLocationId = user.home_base.id
+        APP.storage().saveCurrentUser curU
+
+  setSearchRadius: (searchRadiusMeters) ->
+    unless $('#search_radius_display_show').prop('checked')
+      $('#search_radius_display_hide').prop('checked', false)
+      $('#search_radius_display_show').prop('checked', true)
+    curU = APP.user()
+    oldSRM = curU.searchRadiusMeters
+    curU.searchRadiusMeters = searchRadiusMeters
+    APP.storage().saveCurrentUser curU
+    APP.view().showSearchRadius searchRadiusMeters
+    curUserLocation = APP.getUserMarker().getLatLng()
+    APP.model().setRadarSettings (user, error) ->
+        if oldSRM < curU.searchRadiusMeters
+          APP.showPOIs curUserLocation
+        # else
+        #   sBs = UTIL.searchBounds curUserLocation.lat, curUserLocation.lng, curU.searchRadiusMeters
+        #   APP.markers().getPoiMarkers (marker, poiMarkers, idx) ->
+        #       unless UTIL.withinSearchBounds marker.location().lat, marker.location().lng, sBs
+        #         APP.markers()._removeAt idx
+
+  # location: {id:?} will load location from localStorage or backend first
+  loadLocation: (location, fetch = true) ->
+    if location.lat? || !fetch
+      APP._initPositionCB { coords: { latitude: location.lat, longitude: location.lng } }, location.address, true
+      GUI.closeContextNavPanel()
+      if location.poiId
+        APP.showPOI location.poiId, -1
+      else
+        $('#current_address').html(location.address+' ('+location.id+')')
+        openPopupMarker = APP.getOpenPopupMarker()
+        if openPopupMarker? && openPopupMarker != Main.markerManager().get()
+          openPopupMarker.closePopup()
+        #Main.markerManager().userMarkerMouseOver true
+      if APP.map().getZoom() < 15
+        APP.map().setZoom 15
+      #APP.getUserMarker(true).m.setLocation {lat: location.lat, lng: location.lng}
+    else
+      Storage.Model.instance().withLocation location.id, (location) ->
+          APP.loadLocation location, false
+
+  showPOIs: (location, flags = {withNotes: true, reset: false}) ->
+    if VIEW_MODEL.currentView().key != 'map'
+      VIEW_MODEL.setView VIEW_MODEL.getView('map')
+    APP.model().loadPois UTIL.trimPosVal(location.lat), UTIL.trimPosVal(location.lng), (poi) ->
+        location = {id: poi.locationId, lat: poi.lat, lng: poi.lng, address: poi.address, poiId: poi.id}
+        markerMeta = APP.getMarker poi, true
+        unless markerMeta?
+          # pois don't change location
+          Main.markerManager().add location, Main._markerEventsCB
+      , flags
+
+  showPOI: (poiId, poiNoteId, skipLoad = false) ->
+    if VIEW_MODEL.currentView().key != 'map'
+      VIEW_MODEL.setView VIEW_MODEL.getView('map')
+    if skipLoad
+      APP.view().viewPoiNotes APP.storage().getPoi(poiId), poiNoteId
+    else
+      Storage.Model.instance().loadPoiNotes poiId, poiNoteId, (poi, newPoiNotes) ->
+          APP.view().viewPoiNotes poi, poiNoteId
+    GUI.closeContextNavPanel()
+
+  showPeer: (peer, lastLocation = null, type = 'dialog') ->
+    GUI.closeSystemMessage(type)
+    VIEW_MODEL.setView(VIEW_MODEL.getView('map'))
+
+    unless lastLocation?
+      lastLocation = peer.getLastLocation()
+    APP.loadLocation lastLocation
+    #VIEW_MODEL.setView(VIEW_MODEL.getView('map'))
+    if MC?
+      MC.reload()
+    userMarker = APP.getUserMarker(true).m
+    APP.markers()._checkVisible lastLocation, userMarker
+    #markerMeta = APP.markers().forPeer peer.id
+    markerMeta = APP.getPeerMarker peer, lastLocation, true
+    VoyageX.TemplateHelper.openPeerPopup peer, markerMeta.target()
+
+  getSelectedPositionLatLng: () ->
+    return [@_selectedPosition.lat, @_selectedPosition.lng]
+
+  _setSelectedPositionLatLng: (marker, lat, lng, address) ->
+    location = {lat: UTIL.trimPosVal(lat), lng: UTIL.trimPosVal(lng)}
+    if marker == null
+      marker = Main.markerManager().add location, Main._markerEventsCB
+    else
+      marker = Main.markerManager().sel marker, location.lat, location.lng, Main._markerEventsCB
+    @_selectedPosition.lat = location.lat
+    @_selectedPosition.lng = location.lng
+    @_selectedPosition.address = address
+#    if address != null
+#      $('#cur_loc_addr').html(address)
+    if @_debug # debugRealePos
+      # path-prediction
+      APP._realPosition.lat = location.lat
+      APP._realPosition.lng = location.lng
+      Main._PATH_PREDICTION._pathPredictionOnPosSelect()
+      # neighbourhood-watch
+      peers = APP.storage().getPeers()
+      for peer in peers
+        peerLL = peer.getLastLocation()
+        USERS.checkDistance peer, {lat: peerLL.lat, lng: peerLL.lng}, (peer, inRange) ->
+            if inRange
+              APP.view().systemMessage VoyageX.TemplateHelper.peerInRangeHtml(peer)
+    if showSearchRadius
+      Main.markerManager().searchBounds APP.user().searchRadiusMeters, APP.map()
+
+  _zoomEnd: (e) ->
+    $('#zoom_level').html('<span style="color:white;">zoom: '+APP.map().getZoom()+'</span>')
+
+  _initPositionCB: (position, address = null, isReInit = false) ->
+    location = {lat: UTIL.trimPosVal(position.coords.latitude), lng: UTIL.trimPosVal(position.coords.longitude)}
+    if isReInit
+      marker = Main.markerManager().get()
+    else
+      marker = Main.markerManager().add location, Main._markerEventsCB, {isUserMarker: true, isPeerMarker: false}
+    APP._setSelectedPositionLatLng marker, position.coords.latitude, position.coords.longitude, address
+    APP.map().panTo [position.coords.latitude, position.coords.longitude]
+    APP.publishPosition()
+    APP.showPOIs location
+
+  isRealPositionWatched: () ->
+    APP._realPositionWatch?
+
+  getRealPosition: () ->
+     { lat: APP._realPosition.lat, lng: APP._realPosition.lng }
+
+  # console-debug
+  # pos = APP.map().getCenter()
+  # APP._setRealPosition({coords: {latitude: pos.lat, longitude: pos.lng+0.001}})
+  # pos = L.latLng(APP._realPosition.lat, APP._realPosition.lng)
+  _setRealPosition: (position) ->
+    sBs = UTIL.searchBounds APP._realPosition.lat, APP._realPosition.lng, APP._moveSensorDistMeters
+    unless UTIL.withinSearchBounds position.coords.latitude, position.coords.longitude, sBs
+      APP._realPosition.lat = UTIL.trimPosVal(position.coords.latitude)
+      APP._realPosition.lng = UTIL.trimPosVal(position.coords.longitude)
+      APP._comm.send('/radar', {type: 'move',\
+                                userId: APP.userId(),\
+                                lat: APP._realPosition.lat,\
+                                lng: APP._realPosition.lng})
+      path = APP.storage().getPath APP.user()
+      if path?
+        path = APP.storage().addToPath APP.user().id, APP._realPosition, path
+        VoyageX.Main.mapControl().drawSmoothPath APP.user(), path
+        # don't set location unless user explicitely want's to by activating path (else might disturb work)
+        APP.getUserMarker(true).m.setLocation {lat: APP._realPosition.lat, lng: APP._realPosition.lng}
+      
+      # if APP._movePredictionLastLatLng == null
+      #   APP._movePredictionLastLatLng = {lat: APP._realPosition.lat, lng: APP._realPosition.lng}
+      # else
+      #   APP.cacheTiles()
+      Main._PATH_PREDICTION._pathPredictionOnPosSelect()
+
+      peers = APP.storage().getPeers()
+      for peer in peers
+        peerLL = peer.getLastLocation()
+        USERS.checkDistance peer, {lat: peerLL.lat, lng: peerLL.lng}, (peer, inRange) ->
+            if inRange
+              APP.view().systemMessage VoyageX.TemplateHelper.peerInRangeHtml(peer)
+    APP.watchRealPosition()
+
+  stopRealPositionWatch: () ->
+    if navigator.geolocation && APP._realPositionWatch?
+      navigator.geolocation.clearWatch APP._realPositionWatch
+      APP._realPositionWatch = null
+
+  watchRealPosition: () ->
+    if navigator.geolocation
+      unless APP._realPositionWatch?
+        # updates every second
+        APP._realPositionWatch = navigator.geolocation.watchPosition APP._setRealPosition, (error) ->
+            switch error.code
+              when error.PERMISSION_DENIED
+                console.log 'ERROR: user did not share geolocation data - disable location-query ...'
+                APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [watch] - user did not share geolocation data - disable location-query ...'})
+                navigator.geolocation.clearWatch APP._realPositionWatch
+                APP._realPositionWatch = null
+              when error.POSITION_UNAVAILABLE
+                console.log 'WARN: could not detect current position - retry ...'
+                APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [watch] - could not detect current position ...'})
+                navigator.geolocation.clearWatch APP._realPositionWatch
+                APP._realPositionWatch = null
+                setTimeout 'APP._debugWatchRealPosition({coords: {latitude: APP._realPosition.lat, longitude: APP._realPosition.lng}})', VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS
+              when error.TIMEOUT
+                console.log 'WARN: query position timeout - retry ...'
+                APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [watch] - query position timeout ...'})
+                navigator.geolocation.clearWatch APP._realPositionWatch
+                APP._realPositionWatch = null
+                setTimeout 'APP._debugWatchRealPosition({coords: {latitude: APP._realPosition.lat, longitude: APP._realPosition.lng}})', VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS
+              else
+                console.log 'ERROR: unknown error - disable location-query ...'
+                APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [watch] - unknown error - disable location-query ...'})
+                navigator.geolocation.clearWatch APP._realPositionWatch
+                APP._realPositionWatch = null
+          , { enableHighAccuracy: true, maximumAge: VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS, timeout: VoyageX.Backend._POS_QUERY_TIMEOUT_MILLIS }
+      # alternative: poll position
+      #APP._realPositionWatch = {active: true}
+      #setTimeout 'APP._queryRealPosition()', VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS
+  
+  _debugRealPositionCB: (position, mode) ->
+    sBs = UTIL.searchBounds APP._realPosition.lat, APP._realPosition.lng, APP._moveSensorDistMeters
+    move = !UTIL.withinSearchBounds position.coords.latitude, position.coords.longitude, sBs
+    debugMsg = $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': ['+mode+'] - move='+move+' - '+UTIL.trimPosVal(position.coords.latitude)+'/'+UTIL.trimPosVal(position.coords.longitude)
+    #debugMsg += '\napp[lat|lng] = '+APP._realPosition.lat+' | '+APP._realPosition.lng
+    #debugMsg += '\npos[lat|lng] = '+position.coords.latitude+' | '+position.coords.longitude
+    APP._comm.send('/system', {type: 'debug', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: debugMsg})
+    APP._setRealPosition position
+
+  _debugWatchRealPosition: (position) ->
+    APP._debugRealPositionCB position, 'watch'
+  
+  _debugPollRealPosition: (position) ->
+    APP._debugRealPositionCB position, 'poll'
+
+  # @deprecated -> navigator.geolocation.watchPosition
+  _queryRealPosition: () ->
+    unless APP._realPositionWatch? && APP._realPositionWatchactive
+      return false
+    navigator.geolocation.getCurrentPosition(APP._setRealPosition, (error) ->
+        switch error.code
+          when error.PERMISSION_DENIED
+            console.log 'ERROR: user did not share geolocation data - disable location-query ...'
+            APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [poll] - user did not share geolocation data - disable location-query ...'})
+          when error.POSITION_UNAVAILABLE
+            console.log 'WARN: could not detect current position - retry ...'
+            APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [poll] - could not detect current position ...'})
+            setTimeout 'APP._debugPollRealPosition({coords: {latitude: APP._realPosition.lat, longitude: APP._realPosition.lng}})', VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS
+          when error.TIMEOUT
+            console.log 'WARN: query position timeout - retry ...'
+            APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [poll] - query position timeout'})
+            setTimeout 'APP._debugPollRealPosition({coords: {latitude: APP._realPosition.lat, longitude: APP._realPosition.lng}})', VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS
+          else
+            console.log 'ERROR: unknown error - disable location-query ...'
+            APP._comm.send('/system', {type: 'error', userId: APP.userId(), userName: APP.userName(), userFoto: APP.user().foto, msg: $.format.date(new Date(), 'dd.MM.yyyy HH:mm:ss')+': [poll] - unknown error - disable location-query ...'})
+    , { enableHighAccuracy: true, maximumAge: VoyageX.Backend._POS_QUERY_INTERVAL_MILLIS, timeout: VoyageX.Backend._POS_QUERY_TIMEOUT_MILLIS })
+
+  clearPredictionPaths: () ->
+    Main._PATH_PREDICTION.clearPredictionPaths()
+
+  togglePredictionPathDebug: () ->
+    if @_debug
+      @_debug = false
+      $('#dbg_pred_ctrl').attr('class', $('#dbg_pred_ctrl').attr('class').replace(/\s?menu_ctrl_on/, ''))
+    else
+      @_debug = true
+      APP._realPosition.lat = @_selectedPosition.lat
+      APP._realPosition.lng = @_selectedPosition.lng
+      Main._PATH_PREDICTION._pathPredictionOnPosSelect()
+      $('#dbg_pred_ctrl').attr('class', $('#dbg_pred_ctrl').attr('class')+' menu_ctrl_on')
+
+  _systemCB: (message) ->
+    unless APP._online
+      # for debug only - _online might be false if actually true
+      console.log 'disable _systemCB for debugging offline: ' + message.type
+      return false
+    console.log 'got a system - message: ' + message.type
+    if message.type == 'ready_notification'
+      curU = APP.user()
+      if APP.signedIn(curU)
+        APP.view().setupForAuthState true
+        systemInitCB() # admin-stuff. @see _init_js.html.haml
+        for channel in VoyageX.Main.commChannels()
+          Comm.Comm.setChannelContext channel, curU.peerPort.channel_enc_key
+        USERS.subscribeToAllPeerChannels()
+      else
+        APP.view().setupForAuthState false
+      APP.view().setupForCurrentUser()
+      # all users (not only peers) are loaded - to enable follow-requests for everybody
+      # maybe rather provide some explicit search
+      Storage.Model.instance().loadUsers (user, idx, numUsers) ->
+          USERS.initUser user
+          if idx==(numUsers-1)
+            # when all peers are loaded ...
+            APP.model().syncChatMessages()
+        , -1
+    else if message.type == 'subscription_grant_request'
+    else if message.type == 'subscription_granted'
+      #message.peer.peerPort = {channel_enc_key: message.peer.peerPort.channel_enc_key}
+      #USERS.subscribeToPeerChannels message.peer
+      USERS.initPeer message.peer, true
+    else if message.type == 'subscription_denied'
+    else if message.type == 'subscription_grant_revoked'
+      #message.peer.peerPort = {channel_enc_key: message.peer.peerPort.channel_enc_key}
+      USERS.removePeer message.peer
+    else if message.type == 'quit_subscription'
+      true # do nothing
+    else if message.type == 'callback'
+      if message.channel == 'pois'
+        delete message.channel
+        #message.type = message.action
+        #delete message.action
+        APP._poisCB message
+    else if message.type == 'pull_request'
+      curU = APP.user()
+      if message.push_user_id != curU.id
+        # TODO:
+        # 1) check whether is contact - then pull
+        # 2) check whether pois are bookmarked - then pull
+        # 3) check whether pois are in range - then pull
+        APP.model().pullPois()
+    else if message.type == 'poi_delete'
+      curU = APP.user()
+      Main._STORAGE_CONTROLLER.saveUser {id: curU.id, curCommitHash: message.commit_hash}
+      if curU.id != message.push_user_id
+        Storage.Model.instance().deletePoi message.poi_id, (poi) ->
+            APP.markers().removeForPoi poi.id
+            #APP.view().alert()
+          , false
+    APP._view._systemCB message
+
+  _talkCB: (message) ->
+    unless APP._online
+      # debug only - _online might be false if actually true
+      console.log 'disable _talkCB for debugging offline: ' + message.type
+      return false
+    if APP.userId() == message.userId
+      return null
+    CHAT._talkCB message
+
+  _mapEventsCB: (mapEvent) ->
+    unless APP._online
+      # for debug only - _online might be false if actually true
+      console.log 'disable _mapEventsCB for debugging offline: ' + mapEvent.type
+      return false
+    user = APP.storage().getUser mapEvent.userId
+    location = APP._setEventLocation user, mapEvent
+    curU = APP.user()
+    if curU.id == user.id
+      mapEvent.user = APP.storage().saveCurrentUser {lastLocationId: location.id}, curU
+    else
+      user.lastLocationId = location.id
+      mapEvent.user = APP.storage().saveUser user
+    APP._view._mapEventsCB mapEvent
+  
+  _poisCB: (message) ->
+    unless APP._online
+      # for debug only - _online might be false if actually true
+      console.log 'disable _poisCB for debugging offline: ' + message.type
+      return false
+    console.log 'got a pois - message: ' + message.type
+    if message.type == 'callback'
+      # callbacks are async backend responses for user who changed/committed something
+      # other users receive pull_request-message
+      if message.action?
+        if message.action == 'poi_sync'
+          # after-commit-faye-callback
+          curU = APP.user()
+          Main._STORAGE_CONTROLLER.saveUser {id: curU.id, curCommitHash: message.commit_hash}
+          for uPoi in message.pois
+            # new pois created by local user have id -uPoi.local_time_secs
+            if uPoi.id < 0
+              # deleted
+              Comm.UploadQ._removeFromQueue -uPoi.id
+            else
+              if uPoi.local_time_secs?
+                storedPoi = APP.storage().getPoi -uPoi.local_time_secs
+                unless storedPoi?
+                  # might have been changed already by sync_poi-response - race-condition
+                  storedPoi = APP.storage().getPoi uPoi.id
+              else
+                storedPoi = APP.storage().getPoi uPoi.id
+              if uPoi.notes.length >= 1
+                # uploaded by local user
+                uLocation = APP.storage().getLocation(storedPoi.locationId)
+                Comm.UploadQ.syncResponseCallback uLocation, storedPoi, uPoi, uPoi.notes
+              else
+                # notes where deleted only
+                Comm.UploadQ._removeFromQueue uPoi.id
+        else if message.action == 'pull'
+          curU = APP.user()
+          notifyChange = false
+          # save commit_hash
+          Main._STORAGE_CONTROLLER.saveUser {id: curU.id, curCommitHash: message.commit_hash}
+          # "deleted_pois":[1,4]
+          for deletePoiId in message.deleted_pois
+            APP.deletePoi deletePoiId, true
+          # "modified_pois":{"136":{"notes":[{"id":324,"user":{"id":264,"username":"stephan"},"text":"rttretr"}]}},
+          for poiId in Object.keys(message.modified_pois)
+            poi = APP.storage().getPoi poiId
+            modPoi = message.modified_pois[poiId]
+            modPoi.id = poiId
+            loadStats = { numAdded: modPoi.notes.length, numLeft: modPoi.notes.length, newNotes: [] }
+            for modNote in modPoi.notes
+              if modNote.id < 0
+                APP.storage().deletePoiNote poi, -modNote.id, (poi) ->
+                    # show change if marker-popup is open
+                    oPM = APP.getOpenPopupMarker(true)
+                    if oPM? && oPM.m.isPoiMarker() && (oPM.m._location.poiId == poi.id)
+                      APP.showPOI poi.id, null, true
+                loadStats.numLeft -= 1
+              else
+                notifyChange ||= true
+                Storage.Model.instance().syncWithStorage poi, modNote, (poi, newNotes) ->
+                    console.log 'added #'+newNotes.length+' notes to poi '+poi.id
+                    # show change if marker-popup is open
+                    oPM = APP.getOpenPopupMarker(true)
+                    if oPM? && oPM.m.isPoiMarker() && (oPM.m._location.poiId == poi.id)
+                      APP.showPOI poi.id, null, true
+          # "new_pois":{"136":{"notes":[{"id":324,"user":{"id":264,"username":"stephan"},"text":"rttretr"}]}},
+          for poiId in Object.keys(message.new_pois)
+            modPoi = message.new_pois[poiId]
+            modPoi.id = poiId
+            Storage.Model.setupPoiForNote modPoi
+            loadStats = { numAdded: modPoi.notes.length, numLeft: modPoi.notes.length, newNotes: [] }
+            for newNote in modPoi.notes
+              notifyChange ||= true
+              Storage.Model.instance().syncWithStorage modPoi, newNote, (poi, newNotes) ->
+                  console.log 'added new poi '+poi.id+' with #'+newNotes.length+' notes'
+          if notifyChange
+            console.log 'TODO: notify change after  pull ...'
+            APP.view().alert()
+          # after pull - if there's a queue: sync it ...
+          # also @see setOnline
+          if APP.storage().hasQueue()
+            APP.storage().uploadQueue()
+
+  _radarCB: (radarEvent) ->
+    unless APP._online
+      # for debug only - _online might be false if actually true
+      console.log 'disable _radarCB for debugging offline: ' + radarEvent.type
+      return false
+    if APP.userId() == radarEvent.userId# && radarEvent.type == 'move'
+      return null
+    user = APP.storage().getUser radarEvent.userId
+    location = APP._setEventLocation user, radarEvent
+    user.lastLocationId = location.id
+    radarEvent.user = APP.storage().saveUser user
+    APP._view._radarCB radarEvent
+
+  _syncPoiCB: (cbPoi, cbNewNotes) ->
+    scrollPoiNoteId = if cbNewNotes.length>= 1 then cbNewNotes[cbNewNotes.length-1].id else -1
+    APP.view().viewPoiNotes cbPoi, scrollPoiNoteId, null, true
+
+  _setEventLocation: (user, event) ->
+    if event.locationId?
+      location = APP.storage().getLocation event.locationId
+      unless location?
+        event.id = event.locationId
+        location = APP.storage().saveLocation event
+    else
+      event.id = -user.id
+      location = APP.storage().saveLocation event
+    location
+
+  panPosition: (lat, lng, address) ->
+    APP._setSelectedPositionLatLng Main.markerManager().get(), lat, lng, address
+    APP.map().panTo([lat, lng])
+    #APP.map().setView([lat, lng], 16)
+    #VIEW_MODEL.menuNavClick('map')
+
+  # TODO: provide callback
+  contextNav: () ->
+    sBs = UTIL.searchBounds APP._selectedPosition.lat, APP._selectedPosition.lng, APP.user().searchRadiusMeters
+    pois = APP.storage().poisWithinSearchBounds sBs, (poi) ->
+        # dummy-poiNote for swiper - replaced when attachments are loaded
+        unless poi.notes? && poi.notes.length >= 1
+          poi.notes = [{id: -1, attachment: {url: VoyageX.IMAGES_SWIPER_LOADING_PATH, content_type: 'image/png', width: 200, height: 100}}]
+        Storage.Model.instance().loadPoiNotes poi.id, null, (poiClone, newPoiNotes) ->
+            swiperDummy = $('#poi_swiper_'+poi.id+' [data-poiNoteId=-1]')
+            if swiperDummy.length >= 1
+              # if there is a template it must be swiper's loading-dummy
+              swiperDummy.remove()
+              for note in poiClone.notes
+                swiperSlideHtml = VoyageX.TemplateHelper.swiperSlideHtml poi, note
+                $('#poi_swiper_'+poi.id+' .swiper-wrapper').append(swiperSlideHtml)
+              mySwiper = window['myPoiSwiper'+poi.id]
+              mySwiper.reInit()
+            else
+              # template didn't insert swiperDummy yet, so we can use the real data
+              poi.notes = poiClone.notes
+    this.view().previewPois pois
+
+    this.view().previewBookmarks()
+    
+    this.view().previewUsers()
+#      when 'location_bookmarks'
+#        APP.model().contextNav @_selectedPosition.lat, @_selectedPosition.lng, (pois) ->
+#            console.log('TODO: APP.contextNav for location_bookmarks ...')
+#      when 'people_of_interest'
+#        APP.model().contextNav @_selectedPosition.lat, @_selectedPosition.lng, (pois) -> 
+#            console.log('TODO: APP.contextNav for people_of_interest ...')
+#      else
+#        alert('unknown contextNav-tab '+selectedTab)
+
+  markerControls: () ->
+#     marker = Main.markerManager().get()
+# #    address = null
+# #    APP._setSelectedPositionLatLng marker, marker._latlng.lat, marker._latlng.lng, address
+#     VoyageX.TemplateHelper.openMarkerControlsPopup()
+    APP.view().viewUserMarkerMenu()
+
+  poiNoteControls: () ->
+    if GUI.isMobile()
+      $('#open_upload_data_btn').click()
+    else
+      $('#upload_data_conrols').dialog('open')
+      if ! $('#upload_data_conrols').parent().hasClass('seethrough_panel')
+        $('#upload_data_conrols').parent().addClass('seethrough_panel')
+
+  # sets up form
+  poiNoteInput: () ->
+    $('#poi_note_input').html('')
+    VoyageX.TemplateHelper.poiNoteInputHtml('poi_note_input')
+    APP.poiNoteControls()
+
+  getUserMarker: (meta = false) ->
+    markerMeta = Main.markerManager().forUser()
+    if markerMeta?
+      return if meta then markerMeta else markerMeta.target()
+    null
+
+  getMarker: (poi, meta = false) ->
+    markerMeta = Main.markerManager().forPoi poi.id
+    if markerMeta?
+      return if meta then markerMeta else markerMeta.target()
+    else
+      if poi.location?
+        return Main.markerManager().add poi.location, Main._markerEventsCB, null, meta
+      else
+        if poi.locationId?
+          location = Comm.StorageController.instance().getLocation poi.locationId
+        else
+          location = {lat: poi.lat, lng: poi.lng, address: poi.address}
+        return Main.markerManager().add location, Main._markerEventsCB, null, meta
+
+  getPeerMarker: (peer, location, meta = false) ->
+    markerMeta = Main.markerManager().forPeer peer.id
+    if markerMeta?
+      return if meta then markerMeta else markerMeta.target()
+    else
+      return Main.markerManager().add location, Main._markerEventsCB, {isUserMarker: false, peer: peer}, meta
+
+  getOpenPopupMarker: (meta = false) ->
+    if (userMarkerPopupPanel = $('#marker_controls')).length >= 1
+      marker = Main.markerManager().get meta
+    else if (peerMarkerPopupPanel = $('div[id^=peer_popup_]')).length >= 1
+      peerId = parseInt peerMarkerPopupPanel.attr('id').match(/[0-9]+$/)[0]
+      #peer = Comm.StorageController.instance().getUser peerId
+      marker = APP.getPeerMarker {id: peerId}, null, meta
+    else
+      if (poiMarkerPopupPanel = $('#poi_notes_container')).length >= 1
+        poiId = parseInt poiMarkerPopupPanel.attr('data-poiId')
+        marker = APP.getMarker {id: poiId}, meta
+      else
+        marker = null
+    marker
+
+  # just closes markers of specified type - not any other
+  # poi_notes_container | marker_controls | peer_popup_{peer_id}
+  preTogglePopup: () ->
+    openPopupMarkerMeta = this.getOpenPopupMarker true
+    if openPopupMarkerMeta?
+      if openPopupMarkerMeta.target().getPopup()? && openPopupMarkerMeta.target().getPopup()._isOpen
+        if openPopupMarkerMeta.isUserMarker
+          Main._checkSaveNote 'marker_controls', openPopupMarkerMeta
+        else if openPopupMarkerMeta.peer?
+          Main._checkSaveNote 'peer_popup_'+openPopupMarkerMeta.peer.id, openPopupMarkerMeta
+        else
+          Main._checkSaveNote 'poi_notes_container', openPopupMarkerMeta.m
+        openPopupMarkerMeta.target().closePopup()
+
+  # @closePopupCB: (leafletMarker) ->
+  #   (event) ->
+  #       meta = Main.markerManager().meta leafletMarker
+  #       if meta.isUserMarker
+  #         contentId = 'marker_controls'
+  #       else if meta.peer?
+  #         contentId = 'peer_popup_'+meta.peer.id
+  #       else
+  #         contentId = 'poi_notes_container'
+  #       console.log('closePopupCB: contentId = '+contentId+', leafletMarker = '+Main.markerManager().toString(leafletMarker, meta))
+  #       Main._checkSaveNote contentId, meta
+  #       Main.markerManager().userMarkerMouseOver true
+
+  # poi_notes_container | marker_controls | peer_popup_{peer_id}
+  @_checkSaveNote: (contentId, markerMeta) ->
+    noteEditor = $('#'+contentId).parent().find('.note_editor').first()
+    textArea = noteEditor.find('textarea')
+    if textArea.length >= 1
+      bookmarkText = textArea.val().trim()
+      targetId = parseInt textArea.attr('id').match(/[0-9]+$/)[0]
+      if contentId.match(/^peer_popup_/)?
+        targetType = 'peer'
+        console.log('_checkSaveNote: '+(if bookmarkText == '' then 'deleting' else 'saving')+' note for peer '+Comm.StorageController.instance().getUser(targetId).username)
+      else
+        targetType = 'bookmark'
+        console.log('_checkSaveNote: '+(if bookmarkText == '' then 'deleting' else 'saving')+' note for location '+Comm.StorageController.instance().getLocation(targetId).address)
+      if bookmarkText == ''
+        # cached tiles are not deleted when bookmark is deleted - other cached tiles can only be batch deleted as well
+        #unless contentId.match(/^peer_popup_/)?
+        #  # maybe check first if bookmark exists - but actually doesn't matter
+        #  tile = Main.mapControl().tileForPosition markerMeta.location().lat, markerMeta.location().lng, APP.map().getZoom()
+        #  alert('TODO: Main - _checkSaveNote: delete Tiles '+APP.map().getZoom()+'/'+tile.x+'/'+tile.y+' for bookmark')
+        Storage.Model.instance().deleteNote targetType, targetId
+      else
+        unless contentId.match(/^peer_popup_/)?
+          tile = Main.mapControl().tileForPosition markerMeta.location().lat, markerMeta.location().lng, APP.map().getZoom()
+          #alert('TODO: Main - _checkSaveNote: store Tiles '+APP.map().getZoom()+'/'+tile.x+'/'+tile.y+' for bookmark')
+          Main._PATH_PREDICTION.cacheTile tile, APP.map().getZoom()
+        Storage.Model.instance().addNote targetType, targetId, textArea.val()
+
+  # 
+  @_localMapClicked: (location) ->
+    APP.preTogglePopup()
+    VoyageX.Main.markerManager().userMarkerMouseOver true
+    APP._setSelectedPositionLatLng Main.markerManager().get()||Main.markerManager().add(location, Main._markerEventsCB, true), location.lat, location.lng, location.address
+    APP.publishPosition()
+
+  @_markerEventsCB: (event) ->
+    address = null
+    switch event.type
+      when 'click'
+        markerMeta = Main.markerManager().meta event.target
+        if markerMeta.isUserMarker
+          unless Main.markerManager().userMarkerMouseOver()
+            # click on user-marker while poi-marker is open
+            APP.preTogglePopup()
+            Main.markerManager().userMarkerMouseOver true 
+            APP.markerControls()
+        else
+        #unless markerMeta.isUserMarker
+          APP.preTogglePopup()
+          if event.target.getPopup() && event.target.getPopup()._isOpen
+            # click on poi-marker with open popup
+            event.target.closePopup()
+            Main.markerManager().userMarkerMouseOver true
+          else
+            # click on poi-marker with no popup
+            if markerMeta.peer?
+              VoyageX.TemplateHelper.openPeerPopup markerMeta.peer, event.target
+            else
+              Storage.Model.instance().loadPoiNotes markerMeta.poi.id, null, (poi, newPoiNotes) ->
+                  # userMarkerMouseOver is set in openPOINotePopup
+                  #VoyageX.TemplateHelper.openPOINotePopup poi, event.target
+                  APP.view().viewPoiNotes poi, -1, event.target
+                , false
+      when 'mouseover'
+        markerMeta = Main.markerManager().meta event.target
+        if markerMeta.isUserMarker && Main.markerManager().userMarkerMouseOver()
+          unless event.target.getPopup() && event.target.getPopup()._isOpen
+            # click on user-marker with no popup
+            APP.preTogglePopup()
+            APP.markerControls()
+      when 'dblclick'
+        APP._setSelectedPositionLatLng event.target, event.target._latlng.lat, event.target._latlng.lng, address
+        APP.poiNoteInput()
+      else
+        APP._setSelectedPositionLatLng event.target, event.target._latlng.lat, event.target._latlng.lng, address
+        APP.publishPosition()
+
+#  backend: () ->
+#    Main._BACKEND
+
+  @commChannels: () ->
+    Main._COMM_CHANNELS.slice(0)
+
+  storage: () ->
+    #Main._STORAGE_CONTROLLER
+    # firefox complains Main._STORAGE_CONTROLLER == null
+    Comm.StorageController.instance()
+
+  @mapControl: () ->
+    Main._MAP_CONTROL||VoyageX.MapControl.instance()
+
+  map: () ->
+    if Main._MAP_CONTROL? then Main._MAP_CONTROL.map() else Main._MARKER_MANAGER._map
+
+  @markerManager: () ->
+    Main._MARKER_MANAGER
+
+  markers: () ->
+    Main._MARKER_MANAGER||VoyageX.MarkerManager.instance()
+
+  chat: () ->
+    Main._CHAT_CONTROL
+
+  model: () ->
+    Main._STORAGE_MODEL
+
+  view: () ->
+    @_view
+
+  transfer: () ->
+    Main._UPLOAD_HELPER
+
+  users: () ->
+    USERS
+
+  @instance: () ->
+    Main._SINGLETON

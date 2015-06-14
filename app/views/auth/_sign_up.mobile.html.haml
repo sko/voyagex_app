@@ -1,0 +1,11 @@
+#sign_up_modal{data: {role: 'popup', 'overlay-theme' => 'a', theme: 'a'}}
+  %div{data: {role: 'header'}}
+    %h4.ui-title #{t('auth.sign_up')}
+    %p#sign_up_flash
+  %div{role: 'main'}
+    = form_for(resource, as: resource_name, url: registration_path(resource_name), :remote => true, :format => :js, :html => {:class => "form-signup"}) do |f|
+      = f.email_field :email, id: 'auth_email', :autofocus => true, :label => false, :class => 'form-control', :placeholder => "Email", autocomplete: "off"
+      = f.password_field :password, id: 'auth_password', :label => false, :class => 'form-control', :placeholder => "Password", autocomplete: "off"
+      = f.password_field :password_confirmation, id: 'auth_password_confirmation', :label => false, :class => 'form-control', :placeholder => "Confirm password", autocomplete: "off"
+      %a{ id: 'sign_up_cancel', :href => "#", :class => "btn btn-sm", data: { role: 'button', rel: 'back' } } #{t('cancel')}
+      = f.submit t('auth.sign_up'), :class => "btn btn-sm"

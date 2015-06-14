@@ -1,0 +1,30 @@
+#stats{style: 'display: none;'}
+  #network_state_view
+    %div{style: 'float: left;'}
+      Netwerk-Status:
+    %div{style: 'float: right;'}
+      = radio_button_tag 'network_state', 'online', true, data: {mini: true}, onclick: 'APP.toggleNetworkState(this)'
+      = label_tag 'network_state_online', 'online'
+      = radio_button_tag 'network_state', 'offline', false, data: {mini: true}, onclick: 'APP.toggleNetworkState(this)'
+      = label_tag 'network_state_offline', 'offline'
+  %hr{style: 'clear: both;'}
+  #zoom_level
+  #cache_debug
+    %div{style: 'float: left;'}
+      Pfad-Vorhersage:
+      %br
+      %br
+      = link_to 'hide Paths', '#', onclick: "javascript:APP.clearPredictionPaths();", class: 'menu_link'
+    %div{style: 'float: right;'}
+      = radio_button_tag 'debug_pred', 'on', false, data: {mini: true}, onclick: 'APP.togglePredictionPathDebug()'
+      = label_tag 'debug_pred_on', 'on'
+      = radio_button_tag 'debug_pred', 'off', true, data: {mini: true}, onclick: 'APP.togglePredictionPathDebug()'
+      = label_tag 'debug_pred_off', 'off'
+  %hr{style: 'clear: both;'}
+  #cache_stats
+  #cache_ctrls
+    %hr
+    %button{id: 'clear_cache'}
+      Clear Cache
+
+  %iframe{id: 'cache_view', style: 'width: 100%; display: none'}

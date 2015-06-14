@@ -1,0 +1,29 @@
+#tmpl_poi_note_input{style: 'display: none;'}
+  .messages
+    %div{tmpl: {id: :upload_error}}
+    %div{tmpl: {id: :upload_message}}
+    %div{tmpl: {id: :upload_progress}}
+  .field
+    %span{style: 'float: left; padding-right: 20px;'}
+      #{t('uploads.comment')}
+    = text_area_tag 'upload_comment[text]', '', id: ':remove', 'tmpl-id' => 'upload_comment'
+  .upload_data_container{style: 'width: 100%;', tmpl: {id: :upload_plain_text_container}}
+    .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'plain_text_upload_btn'}}
+      .ui-button-text
+        #{t('uploads.upload_plain_text').html_safe}
+  .upload_data_container{style: 'display: none; width: 100%;', tmpl: {id: :upload_cam_container}}
+    /= render partial: '/pois/form/camera_data.mobile', locals: {poi_note: poi_note}
+    = render partial: '/pois/form/tmpl_camera_data.mobile', locals: {poi_note: poi_note}
+  .upload_data_container{style: 'display: none; width: 100%;', tmpl: {id: :upload_file_container}}
+    -#%script
+    -#  var updateActionPathTmpl = '#{poi_note_path(id: ':comments_on_id')}';
+    = form_for poi_note, url: '#', remote: true, :html => { class: nil, multipart: true, 'tmpl-id' => 'upload_form', target: 'upload_target', 'data-poiId' => ':poi_id', 'data-commentsOnId' => ':comments_on_id' } do |f|
+      = render partial: '/pois/form/tmpl_file_data', locals: {poi_note: poi_note, f: f}
+      = hidden_field_tag 'location[latitude]', '', id: ':remove', 'tmpl-id' => 'location_latitude'
+      = hidden_field_tag 'location[longitude]', '', id: ':remove', 'tmpl-id' => 'location_longitude'
+  .upload_data_container{style: 'display: none; width: 100%;', tmpl: {id: :upload_embed_container}}
+    = text_area_tag 'upload_comment[embed]', '', id: ':remove_upload_comment_embed', 'tmpl-id' => 'embed'
+    %br
+    .ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only{tmpl: {id: 'embed_upload_btn'}}
+      .ui-button-text
+        #{t('uploads.upload_embed').html_safe}

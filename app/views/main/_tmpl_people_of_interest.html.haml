@@ -1,0 +1,11 @@
+%table#tmpl_people_i_follow{style: 'display: none;'}
+  -#%tbody#i_follow
+  %tr.user-container{data: {userId: '{user_id}'}}
+    %td
+      %img{tmpl: {src: '{peer_foto_url}'}, style: 'max-width: 35px !important;'}
+    %td
+      {username}
+    %td{width: 15}
+      &nbsp;
+    %td
+      = link_to '{last_location}', '#', onclick: "javascript:APP.showPeer(APP.storage().getUser({user_id}), {id: {lastLocationId}, lat: {lastLat}, lng: {lastLng}, address: '{lastAddress}'.trim()!='' ? '{lastAddress}' : null});"

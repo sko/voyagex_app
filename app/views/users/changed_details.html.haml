@@ -1,0 +1,3 @@
+-# this is used when uploading with iframe-target
+%script
+  = render(partial: '/users/updated', formats: [:js], locals: {window_prefix: 'parent.'}).html_safe

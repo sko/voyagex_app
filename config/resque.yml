@@ -1,0 +1,6 @@
+development: 
+  redis_url: redis://localhost:6379/
+production: 
+  redis_url: redis://localhost:6379/
+stage:
+  redis_url: redis://localhost:6379/

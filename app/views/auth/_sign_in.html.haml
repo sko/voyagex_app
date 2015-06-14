@@ -1,0 +1,9 @@
+.modal
+  .modal-dialog#sign_in_modal
+    .modal-header
+      %h4#SignInModal.modal-title #{t('auth.sign_in')}
+      %p#sign_in_flash
+    .modal-body
+      = form_for(resource, as: resource_name, url: session_path(resource_name), :remote => true, :format => :js, :html => {id: 'new_session', :class => "form-signin"}) do |f|
+        = f.email_field :email, id: 'auth_signin_email', :autofocus => true, :label => false, :class => 'form-control', :placeholder => "Email", autocomplete: "off"
+        = f.password_field :password, id: 'auth_signin_password', :label => false, :class => 'form-control', :placeholder => "Password", autocomplete: "off"
