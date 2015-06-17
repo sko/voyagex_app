@@ -6,6 +6,15 @@ module Comm
 
     def ping
       msg = { ping_key: params[:key], commit_hash: Commit.latest.hash_id }
+      if params[:flags].present?
+        if params[:flags].include? 'user'
+          user = tmp_user
+          last_loc = last_location user
+          msg[:user] = user_json user
+          msg[:user][:peerPort] = { sys_channel_enc_key: user.comm_port.sys_channel_enc_key,
+                                    channel_enc_key: (user_signed_in? ? user.comm_port.channel_enc_key : nil) }
+        end
+      end
       render json: msg
     end
 

@@ -38,6 +38,11 @@ module ::GeoUtils
     limits
   end
 
+  def within_limits lat, lng, limits
+    lat >= limits[:lat_south] && lat <= limits[:lat_north] &&
+    lng >= limits[:lng_west] && lng <= limits[:lng_east]
+  end
+
   def nearby_pois location, radius_meters = 10, limits_lat_lng = {}
     limits = limits_constraint location, radius_meters, limits_lat_lng
     nearbys = Poi.joins(:location).where(locations: { latitude: limits_lat_lng[:limits_lat], longitude: limits_lat_lng[:limits_lng] })

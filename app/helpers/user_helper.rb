@@ -3,8 +3,12 @@ require 'net/http'
 module UserHelper
   include ::GeoUtils
 
-  def user_json user
+  def last_location user
     last_loc = user.snapshot.location||nearby_location(Location.new(latitude: user.snapshot.lat, longitude: user.snapshot.lng), 10)
+  end
+
+  def user_json user
+    last_loc = last_location user
     last_loc_poi = last_loc.persisted? ? Poi.where(location: last_loc).first : nearby_pois(last_loc, 10).first
     geometry = Paperclip::Geometry.from_file(user.foto) if user.foto.present?
     foto_width = geometry.present? ? geometry.width.to_i : -1
@@ -39,34 +43,27 @@ module UserHelper
     json
   end
 
-  # actually this is users, not peers
-  def peers_json location_id
-    peers_json = []
+  def users_json
+    users_json = []
     peers_index = {}
     
-    loc = Location.find(location_id) if location_id != -1
     # i_follow
     rel = tmp_user.follows # User
-    rel = rel.where(location: loc) if loc.present?
-    rel.each { |u| add_to_peers_json(peers_index, peers_json, u, { i_follow: true }) }
+    rel.each { |u| add_to_users_json(peers_index, users_json, u, { i_follow: true }) }
     # i_want_to_follow
     rel = tmp_user.requested_grant_to_follow # CommPort
-    rel = rel.where(location: loc) if loc.present?
-    rel.each { |c_p| add_to_peers_json(peers_index, peers_json, c_p.user, { i_want_to_follow: true }) }
+    rel.each { |c_p| add_to_users_json(peers_index, users_json, c_p.user, { i_want_to_follow: true }) }
     # i_dont_follow 
     rel = User.joins(:comm_port).where('`users`.id != ? and `users`.current_sign_in_at is not null and `comm_ports`.id not in (select `comm_peers`.comm_port_id from `comm_peers` where `comm_peers`.peer_id = ?)', tmp_user.id, tmp_user.id).order('`users`.username')
-    rel = rel.where(location: loc) if loc.present?
-    rel.each { |u| add_to_peers_json(peers_index, peers_json, u, { i_dont_follow: true }) }
+    rel.each { |u| add_to_users_json(peers_index, users_json, u, { i_dont_follow: true }) }
     # follow_me
     rel = tmp_user.comm_port.followers.order(:username) # User
-    rel = rel.where(location: loc) if loc.present?
-    rel.each { |u| add_to_peers_json(peers_index, peers_json, u, { follows_me: true }) }
+    rel.each { |u| add_to_users_json(peers_index, users_json, u, { follows_me: true }) }
     # want_to_follow_me
     rel = tmp_user.comm_port.follow_grant_requests.order(:username) # User
-    rel = rel.where(location: loc) if loc.present?
-    rel.each { |u| add_to_peers_json(peers_index, peers_json, u, { wants_to_follow_me: true }) }
+    rel.each { |u| add_to_users_json(peers_index, users_json, u, { wants_to_follow_me: true }) }
 
-    peers_json
+    users_json
   end
 
   #
@@ -215,13 +212,13 @@ query
 
 private
 
-  def add_to_peers_json peers_index, peers_json, peer, flags
+  def add_to_users_json peers_index, users_json, peer, flags
     idx = peers_index[peer.id]
     if idx.present?
-      peers_json[idx][:flags].merge! flags
+      users_json[idx][:flags].merge! flags
     else
-      peers_index[peer.id] = peers_json.length
-      peers_json << peer_json(peer.comm_port, flags)
+      peers_index[peer.id] = users_json.length
+      users_json << peer_json(peer.comm_port, flags)
     end
   end
 

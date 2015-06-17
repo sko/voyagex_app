@@ -43,7 +43,7 @@ class window.VoyageX.TemplateHelper
     replace(/\{media_file_tag\}/, TemplateHelper._mediaFileTag(poiNote.attachment, meta)).
     replace(/\{username\}/, username).
     replace(/\{comment\}/, UTIL.padTextHtml(poiNote.text, 80)).
-    replace(/\{displayDelete\}/, (if isCurrentUserNote then 'inline' else 'none'))
+    replace(/\{displayDelete\}/, (if isCurrentUserNote && (i != 0) then 'inline' else 'none'))
 
   @poiNotePopupHtml: (poi, meta) ->
     if poi.notes[0].user?
@@ -250,7 +250,7 @@ class window.VoyageX.TemplateHelper
             containerRegexp = new RegExp('(<div[^>]* id=[\'"]peer_popup_'+peer.id+'[\'"][^>]*>)(.|[\\r\\n])+?(<div[^>]* class=[\'"]\\s*p2p_controls\\s*[\'"])')
             popupHtml = popupHtml.replace(containerRegexp, '$1'+p2pChatHtml+'$3')
           popupHtml
-    APP.chat().addP2PMsgInput $('#p2p_message_'+peer.id)
+    CHAT.addP2PMsgInput $('#p2p_message_'+peer.id)
     VoyageX.Main.markerManager().userMarkerMouseOver false
 
   @bcChatMsgHtml: (from, message, meOrOther, messageHtml = null) ->

@@ -36,13 +36,8 @@ class window.Comm.StorageController
     @_jsonObjects = {}
     @_tileDB = {}
     @_tileMeta = null
-    #@_tileLoadQueue = {}
-    #@_tileImageContentType = 'image/webp'
     @_attachmentMeta = null
     @_fotoMeta = null
-    #@_storedFilesAreBase64 = false
-    #@_grantedBytes = 0
-    #@_dirReaders = {}
     requestedBytes = Math.pow(2, 26) # 64MB
     @_fileUtils = new Comm.FileUtils requestedBytes, 'image/webp', false, fsInitCB
 
@@ -748,7 +743,6 @@ class window.Comm.StorageController
     ['poiNotes', 'attachments', ''+poiNote.id]
 
   @isFileBased: () ->
-    #StorageController._FS?
     Comm.FileUtils._FS?
     #false
 
@@ -781,7 +775,6 @@ class window.Comm.StorageController
 
   storeTile: (xYZ, data, promise = null, deferredModeParams = null) ->
     if StorageController.isFileBased()
-      #this._storeTileAsFile xYZ, null, data, deferredModeParams
       Comm.FileUtils.instance().storeTile xYZ, data, promise, deferredModeParams
     else
       unless data?
@@ -804,12 +797,6 @@ class window.Comm.StorageController
       stored = localStorage.getItem storeKey
       if stored == null
         console.log 'caching tile: '+storeKey
-#        tileStoreZ = {}
-#        yEntry = {}
-#        yEntry[xYZ[1]] = data
-#        tileStoreZ[xYZ[0]] = [yEntry]
-#        localStorage.setItem 'comm.tiles.'+xYZ[2], JSON.stringify(listEntries)
-#TODO:refactored when started FileUtils        delete @_tileLoadQueue[StorageController.tileKey(xYZ)]
         localStorage.setItem storeKey, data.properties.data
         @_tileDB[storeKey] = data.properties.data
         @_tileMeta.numTiles = @_tileMeta.numTiles+1
@@ -822,18 +809,10 @@ class window.Comm.StorageController
       Comm.FileUtils.instance().getTile xYZ, deferredModeParams
     else
       storeKey = StorageController.tileKey(xYZ)
-#TODO:refactored when started FileUtils              stored = @_tileLoadQueue[storeKey]
-#TODO:refactored when started FileUtils              if stored?
-#TODO:refactored when started FileUtils                #console.log('getTile - stored in queue: '+storeKey); 
-#TODO:refactored when started FileUtils                return stored.promise
       stored = @_tileDB['comm.tiles.'+storeKey]
       unless stored?
-#        stored = @_tileLoadQueue[storeKey]
-#        unless stored?
-          stored = localStorage.getItem 'comm.tiles.'+storeKey
-          @_tileDB['comm.tiles.'+storeKey] = stored
-#        else
-#          console.log('stored in queue: '+storeKey); 
+        stored = localStorage.getItem 'comm.tiles.'+storeKey
+        @_tileDB['comm.tiles.'+storeKey] = stored
       # for backward-compatibility
       if stored?
         stored
@@ -923,9 +902,9 @@ class window.Comm.StorageController
     uploadQKey = 'comm.uploadQ.poiNotes'
     localStorage.getItem(uploadQKey)?
 
-  queueUpload: (poi, poiNote, callback, attachmentData, deferredModeParams = null) ->
+  queueUpload: (poi, poiNote, callback, attachmentData) ->
     @_uploadQ = new Comm.UploadQ()
-    @_uploadQ.addUpload poi, poiNote, callback, attachmentData, deferredModeParams
+    @_uploadQ.addUpload poi, poiNote, callback, attachmentData
 
   queueDeletePoi: (poi, callback) ->
     Comm.UploadQ.deletePoi poi, callback
@@ -1048,9 +1027,11 @@ class window.Comm.StorageController
       storedJSON
 
   get: (storeKey, listKey = null) ->
-    # FIXME @_jsonObjects is an internal cache-object and should not be exposed to concurrent access
-    #       readonly but 'live' copy -> wrapper object! with methods getItem() for [] and real object 
-    @_jsonObjects[storeKey] || JSON.parse(localStorage.getItem(storeKey))
+    # WARN don't change objects returned from here - all subsequent returned objects will be affected
+    stored = @_jsonObjects[storeKey] || JSON.parse(localStorage.getItem(storeKey))
+    if stored? && listKey?
+      return stored[listKey]
+    stored
 
   getNumElements: (storeKey, listKey = null) ->
 #    # TODO listKey != null, id might not be available
@@ -1144,7 +1125,7 @@ class Comm.UploadQ
 
   # here the storing of the uploads will be completed.
   # after everything is stored: callback will be called
-  addUpload: (poi, poiNote, callback, attachmentData, deferredModeParams = null) ->
+  addUpload: (poi, poiNote, callback, attachmentData) ->
     @_poi = poi
     @_poiNote = poiNote
     #@_callback = callback
@@ -1167,18 +1148,11 @@ class Comm.UploadQ
 
     unless Comm.StorageController.isFileBased()
       # FIXME - not implemented
-      Comm.StorageController.instance().storePoiNoteAttachment @_poiNote, base64ImgDataUrl, deferredModeParams
+      Comm.StorageController.instance().storePoiNoteAttachment @_poiNote, base64ImgDataUrl
       APP.view().cacheStats()
     else
       if @_file?
-        deferred = $.Deferred()
-        deferredModeParams = { fileUrl: Storage.Model.attachmentUrl,\
-                               fileMeta: poiNote.attachment,\
-                               fileOwner: poiNote,\
-                               deferred: deferred,\
-                               promise: deferred.promise() }
-        # deferredModeParams.deferred = $.Deferred()
-        # deferredModeParams.promise = deferredModeParams.deferred.promise()
+        deferredModeParams = Storage.Model.deferredModePoiNoteAttachmentParams poiNote
         ((uploadQ) ->
             deferredModeParams.promise.then (url) ->
                 console.log 'UploadQ - addUpload: attachmentUrl-promise resolved to: '+url
@@ -1202,8 +1176,6 @@ class Comm.UploadQ
   # AFTER-commit call is in Main - _poisCB 
   @syncResponseCallback: (location, poi, cbPoi, cbNewPoiNotes) ->
     qPoiId = poi.id
-    #oldIdMarker = APP.getMarker poi, true
-
     if location.id < 0
       location = APP.storage().resetLocation location, { id: cbPoi.locationId,\
                                                          lat: cbPoi.lat,\
@@ -1231,32 +1203,16 @@ class Comm.UploadQ
     #                               local-notes are marked with local_time_secs <-> -id
     for cbN, cbIdx in cbNewPoiNotes
       if cbN.local_time_secs?
-        # there are as many notes with id < 0 as cbNewPoiNotes
-        # FIXME that's not true - there could be more notes added meanwhile from other users 
-        # so use local_time_secs: <-> id in backend-response (cb)
         qN = poi.notes[curNewPoiNoteIdx]
         if qN.attachment? && (!qN.attachment.content_type.match(/^embed:/))
-          ((poiNote, cbPoiNote) ->
-            #APP.storage()._fileUtils._dirReaders.entry.getFile '/poiNotes/attachments/'+poiNote.id, {}, (fileEntry) ->
-            APP.storage()._fileUtils._dirReaders.entries['poiNotes'].entries['attachments'].entry.getFile poiNote.id, {}, (fileEntry) ->
-                fileEntry.moveTo APP.storage()._fileUtils._dirReaders.entries['poiNotes'].entries['attachments'].entry, cbPoiNote.id
-                #fileEntry.moveTo APP.storage()._fileUtils._dirReaders.entry.getDirectory '/poiNotes/attachments/'
-                # next can only be done after file is moved
-                # the new note is passed on to display - use local file-system-url to work offline later
-                cbPoiNote.attachment.url = poiNote.attachment.url
-                APP.view().renameAttachment cbPoiNote
-              , (e) ->
-                  console.log('syncResponseCallback - '+e)
-          )(qN, cbN)
-          #qN.attachment.url = qN.attachment.url.replace(/[^\/]+$/, cbN.id)
+          ((poi, poiNote, cbPoiNote) ->
+            APP.storage()._fileUtils.renameAttachment poiNote.id, cbPoiNote.id, () ->
+                poiNote.attachment.url = poiNote.attachment.url.replace(/[^\/]+$/, poiNote.id)
+                poiKey = Comm.StorageController.poiKey {id: poi.id}
+                localStorage.setItem poiKey, JSON.stringify(poi)
+                APP.view().changeAttachmentUrl poiNote
+          )(poi, qN, cbN)
         qN.id = cbN.id
-      else
-        console.log '@deprecated - only local users\' notes  ar synced here'
-        # # new note added by other user - inserted @ backend-calculated pos
-        # # !! has to be updated in view
-        # cbN.updateView = true
-        # poi.notes.splice curNewPoiNoteIdx, 0, cbN
-        # curNewPoiNoteIdx += 1
       curNewPoiNoteIdx += 1
     
     # save the poi with new id and new note-ids
@@ -1264,13 +1220,6 @@ class Comm.UploadQ
     localStorage.setItem poiKey, JSON.stringify(poi)
 
     UploadQ._removeFromQueue qPoiId
-
-    # test morgen
-    # # add all old notes for display -> @see _syncPoiCB
-    # for i in [0..poi.notes.length-cbNewPoiNotes.length-1] by 1
-    #   cbPoi.notes.splice i, 0, poi.notes[i]
-
-    # APP._syncPoiCB cbPoi, cbNewPoiNotes
     APP._syncPoiCB poi, poi.notes
 
   # deletes all queued entries(notes) for this poi
@@ -1338,7 +1287,7 @@ class Comm.UploadQ
       i = maxIdx-idxSub
       qEntry = qEntries[i]
       if qEntry.poiId == qPoiId
-        console.log('removeFromQueue - removing Q-entry id: '+qEntry.id)
+        console.log('removeFromQueue - removing Q-entry poiId: '+qEntry.poiId+', poiNoteId: '+qEntry.id)
         qEntries.splice i, 1
         if qEntries.length >= 1
           localStorage.setItem(uploadQKey, JSON.stringify(qEntries));

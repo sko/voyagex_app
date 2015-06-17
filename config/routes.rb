@@ -17,19 +17,19 @@ VoyageX::Application.routes.draw do
 
   resources :users, only: [:update] do
   end
-  get '/peers/:location_id', to: 'users#peers', as: :peers
+  get '/users', to: 'users#users', as: :users
   get '/unread_chat_messages', to: 'users#unread_chat_messages', as: :unread_chat_messages
   put '/chat_message_received/:id', to: 'users#chat_message_received', as: :chat_message_received
-  # get '/peers/:lat/:lng', to: 'users#peers', as: :peers, :constraints => { :lat => /([0-9]+\.[0-9]+|:[a-z]+)/,
-  #                                                                          :lng => /([0-9]+\.[0-9]+|:[a-z]+)/ }
 
   get '/location_bookmarks', to: 'main#index'
   get '/location_data/:location_id', to: 'main#location_data', as: :location_data
-  get '/pois/:lat/:lng', to: 'pois#pois', as: :pois, :constraints => { :lat => /([0-9]+\.[0-9]+|:[a-z]+)/,
-                                                                       :lng => /([0-9]+\.[0-9]+|:[a-z]+)/ }
+  get '/pois/:lat/:lng', to: 'pois#pois', as: :pois, constraints: { lat: /([0-9]+\.[0-9]+|:[a-z]+)/,
+                                                                    lng: /([0-9]+\.[0-9]+|:[a-z]+)/ }
   post '/sync_pois', to: 'pois#sync_pois', as: :sync_pois
-  #delete '/pois/:id', to: 'pois#destroy', as: :poi_note
-  match '/pull_pois', to: 'pois#pull_pois', as: :pull_pois, via: [:get, :post]
+  match '/pull_pois/:lat/:lng/:radius', to: 'pois#pull_pois', as: :pull_pois,
+                                                              via: [:get, :post],
+                                                              constraints: { lat: /([0-9]+\.[0-9]+|:[a-z]+)/,
+                                                                             lng: /([0-9]+\.[0-9]+|:[a-z]+)/ }
   
   get '/manifest', to: 'main#manifest', as: :manifest
   match '/set_user_detail/:detail', to: 'users#change_details', as: :set_user_detail, via: [:get, :post]

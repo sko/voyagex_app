@@ -1,6 +1,7 @@
 #require 'faye'
 class PostCommit
   include PoiHelper
+  include PoiHelper
 
   LOGGER = Logger.new("#{Rails.root}/log/post_commit.log")
 
@@ -31,6 +32,8 @@ class PostCommit
     #LOGGER.debug "pull_pois: ENV['USER'] = #{ENV['USER']}"
     LOGGER.debug "pull_pois: user_id = #{user_id}, commit_hash = #{commit_hash}"
     @user = User.find user_id
+    location = @user.snapshot.location.present? ? @user.snapshot.location : Location.new(latitude: @user.snapshot.lat, longitude: @user.snapshot.lng)
+    ls_c = lat_lng_limits location.latitude, location.longitude, @user.search_radius_meters
 
     vm = VersionManager.new Poi::MASTER, Poi::WORK_DIR_ROOT, @user, false#@user.is_admin?
     prev_commit = vm.cur_commit
@@ -56,12 +59,20 @@ class PostCommit
     if diff_added.present?
       diff_added.each do |poi_id, note_ids|
         is_new_poi = note_ids.delete('self').present?
+        cur_poi = nil
         note_ids.each_with_index do |note_id, idx|
           poi_note = PoiNote.find note_id
+          unless cur_poi.present?
+            # out-of-range-poi
+            break unless within_limits(poi_note.poi.location.latitude, poi_note.poi.location.longitude, ls_c)
+            cur_poi = poi_note.poi
+          end
           note_ids[idx] = poi_note_json(poi_note, false)
         end
+        # out-of-range-poi is nil
+        next unless cur_poi.present?
         if is_new_poi
-          poi_json = poi_json PoiNote.find(note_ids[0][:id]).poi
+          poi_json = poi_json cur_poi
           poi_json.delete :id
           @new_pois[poi_id.to_i] = { notes: note_ids }.merge!(poi_json)
         else
@@ -133,9 +144,7 @@ class PostCommit
     #LOGGER.debug "sync_pois: vm.cur_commit = #{vm.cur_commit}, vm.status = #{vm.status}"
 
     diff = vm.changed
-    # TODO - M (edit)
     diff_added = diff['A']
-    diff_modified = diff['M']
     diff_deleted = diff['D']
 
     errors = []

@@ -1,12 +1,8 @@
-#
-# tile-length in meters:
-# map.containerPointToLatLng(L.point(0,0)).distanceTo(map.containerPointToLatLng(L.point(0,256)))
-#
 class window.VoyageX.MapControl
 
   @_SINGLETON = null
 
-  # zooms msut be sorted from lowest (f.ex. 1) to highest (f.ex. 16)
+  # zooms must be sorted from lowest (f.ex. 1) to highest (f.ex. 16)
   constructor: (mapOptions, offlineZooms, cacheStrategy, mapReadyCB, tileHandler = null) ->
     unless tileHandler?
       tileHandler = new L.TileLayer.Functional(VoyageX.MapControl.drawTile, {
@@ -22,9 +18,7 @@ class window.VoyageX.MapControl
     @_maxZoom = @_zooms[@_zooms.length - 1]
     @_offlineZooms = offlineZooms
     @_numTilesCached = 0
-    @_tileImageContentType = 'image/webp'
-    #@_tileImageContentType = 'image/png'
-    #@_tileLoadQueue = []
+    @_tileImageContentType = 'image/webp' # 'image/png'
     @_tileLoadQueue = {}
     @_cacheMissTiles = []
     @_saveCallsToFlushCount = 0
@@ -34,9 +28,6 @@ class window.VoyageX.MapControl
     @_map.whenReady () ->
         console.log '### map-event: ready ...'
         mapReadyCB this
-        #MapControl.instance().showTileInfo false
-        #for poi in APP._initPoisOnMap
-        #  marker = Main.markerManager().add poi.location, VoyageX.Main._markerEventsCB, false
         if APP.isOnline()
           unless Comm.StorageController.isFileBased()
             x = parseInt(MC._map.project(MC._map.getCenter()).x/256)
@@ -61,12 +52,6 @@ class window.VoyageX.MapControl
       )
     @_map.on 'click', (event) ->
       VoyageX.Main._localMapClicked {lat: event.latlng.lat, lng: event.latlng.lng, address: null}
-    # @_map.on('locationfound', (e) ->
-    #     alert('found location...')
-    #   )
-    # @_map.on('locationerror', (e) ->
-    #     alert('geolocation timed out - manual selection required.\nsetting default location...')
-    #   )
 
   map: () ->
     @_map
@@ -101,7 +86,7 @@ class window.VoyageX.MapControl
     curTileY = parseInt curLatY/256
     {x: curTileX, y: curTileY, latX: curLatX, latY: curLatY}
   
-  # needed to replace image-src with custom value
+  # needed to replace image-src-url with custom url
   tileImageForPosition: (lat, lng, zoom, tileData = null, callback = null) ->
     unless tileData?
       tileData = this.tileForPosition(lat, lng, zoom)
@@ -109,10 +94,6 @@ class window.VoyageX.MapControl
     offTop = parseInt(APP.map().getPixelOrigin().y/256)*256 - APP.map().getPixelOrigin().y
     numTilesLeft = parseInt((tileData.latX - offLeft - APP.map().getPixelOrigin().x)/256)
     numTilesDown = parseInt((tileData.latY - offTop - APP.map().getPixelOrigin().y)/256)
-    #latLngPixelOrigin = APP.map().unproject(L.point((APP.map().getPixelOrigin().x+offLeft), (APP.map().getPixelOrigin().y+offTop)))
-    #tileDataPixelOrigin = this.tileForPosition(latLngPixelOrigin.lat, latLngPixelOrigin.lng, zoom)
-    #numTilesLeft = tileData.x-tileDataPixelOrigin.x
-    #numTilesDown = tileData.y-tileDataPixelOrigin.y
     left = numTilesLeft*256 + offLeft
     top = numTilesDown*256 + offTop
     if callback?
@@ -121,12 +102,6 @@ class window.VoyageX.MapControl
       $("#map > .leaflet-map-pane > .leaflet-tile-pane .leaflet-tile-container:parent > img.leaflet-tile[style*='left: "+left+"'][style*='top: "+top+"']")
 
   # iterate over view-elements / divs of all tiles loaded by leaflet
-  # first leaflet-tile in view is:
-  # $("#map .leaflet-tile-pane img.leaflet-tile[style*='top: -'][style*='left: -']")
-  # APP.map().getPixelOrigin()
-  # first tile: parseInt(APP.map().getPixelOrigin().x/256)
-  # => left: parseInt(APP.map().getPixelOrigin().x/256)*256-APP.map().getPixelOrigin().x
-  # => top: parseInt(APP.map().getPixelOrigin().y/256)*256-APP.map().getPixelOrigin().y
   _eachTile: (callback, clearOnly) ->
     tiles = $('#map > .leaflet-map-pane > .leaflet-tile-pane .leaflet-tile-container:parent > .leaflet-tile')
     remove = tiles.first().parent().children('div[data-role=tileInfo]')
@@ -142,11 +117,11 @@ class window.VoyageX.MapControl
         # height: 256px; width: 256px; transform: translate(310px, -91px);
         xMatch = style.match(/left:(.+?)px/)
         if xMatch?
-          # chrome
+          # chrome@desktop
           xOff = parseInt(xMatch[1].trim())+1
           yOff = parseInt(style.match(/top:(.+?)px/)[1].trim())+1
         else
-          # firefox
+          # firefox, chrome@android
           xOff = parseInt(style.match(/translate.?.?\((.+?)px/)[1].trim())+1
           yOff = parseInt(style.match(/translate.?.?\(.+?,(.+?)px/)[1].trim())+1
         callback xOff, yOff, tile, style
@@ -184,15 +159,11 @@ class window.VoyageX.MapControl
           $("#map > .leaflet-map-pane > .leaflet-tile-pane .leaflet-tile-container:parent").
           append('<div data-role="tileInfo" style="position: absolute; '+style+' z-index: 9999; opacity: 0.5; text-align: center; vertical-align: middle; border: 1px solid '+color+'; color: '+color+'; font-weight: bold;">'+key+'</div>')
 
-  # check if second-last path is inaccuracyFactor-times than both last and third last
-  # wenn die letzten beiden ungefähr gleich groß waren (fehler zurück)
-  # und die beiden davor ungefähr gleichgroß waren
-  # und der abstand vom letzten punkt zum 3 letzten punkt ungefähr so ist wie der vom 4 letzen zum 3. letzen
-  # dann vorlezten punkt entfernen.
-  # X-X-X-------X ... don't remove 
-  # X-X-------X-X ... remove 
+  # compare second-last-path-distance to last- and third-last-path-distance: should not be 
+  # more than inaccuracyFactor-times the average
+  # X-X-X-------X         ... don't remove 
+  # X-X-------X-X         ... remove 
   # X-X-X-------X-------X ... don't remove 
-  # ?: also check @_moveSensorDistMeters
   _smoothenPath: (user, path) ->
     if path.length >= 5
       inaccuracyFactor1 = 1.25
@@ -266,15 +237,6 @@ class window.VoyageX.MapControl
     console.log 'drawTile - ........................................'+storeKey
     if Comm.StorageController.isFileBased()
       # use File-API
-      # deferredModeParams = { view: view,\
-      #                        prefetchZoomLevels: true,\
-      #                        save: true,\
-      #                       #loadTileFromUrlCB: MapControl.loadTileFromUrl,\
-      #                        loadTileFromUrlCB: MC._cacheStrategy.getLoadTileFromUrlCB(),\
-      #                        fileStatusCB: MapControl._fileStatusDeferred,\
-      #                        deferred: $.Deferred(),\
-      #                        promise: null }
-      #deferredModeParams.promise = deferredModeParams.deferred.promise()
       deferredModeParams = MapControl.deferredModeParams view, cacheHints
       Comm.StorageController.instance().getTile [view.tile.column, view.tile.row, view.zoom], deferredModeParams
       deferredModeParams.promise
@@ -292,7 +254,7 @@ class window.VoyageX.MapControl
     { view: view,\
       prefetchZoomLevels: true,\
       save: true,\
-      #loadTileFromUrlCB: MapControl.loadTileFromUrl,\
+     #loadTileFromUrlCB: MapControl.loadTileFromUrl,\
       loadTileFromUrlCB: MC._cacheStrategy.getLoadTileFromUrlCB(cacheHints),\
       fileStatusCB: MapControl._fileStatusDeferred,\
       deferred: deferred,\
@@ -334,17 +296,15 @@ class window.VoyageX.MapControl
   # 2b: a write-request on a file failed (created == true)
   @_fileStatusDeferred: (deferredModeParams, created) ->
     xYZ = [deferredModeParams.view.tile.column, deferredModeParams.view.tile.row, deferredModeParams.view.zoom]
-    console.log 'fileStatusCB (created = '+created+'): xYZ = '+xYZ
+    console.log '_fileStatusDeferred: fileStatusCB (created = '+created+'): xYZ = '+xYZ
     if created
-      #if xYZ.toString() == MC._tileLoadQueue[0].xYZ.toString()
-      #if MC._saveCallsToFlushCount == MC._tileLoadQueue.length
       tilesToSaveKeys = Object.keys(MC._tileLoadQueue)
       if MC._saveCallsToFlushCount == tilesToSaveKeys.length
         MC._saveCallsToFlushCount = 0
         for xY in Object.keys(MC._tileLoadQueue)
-          #console.log '### _fileStatusDeferred: prefetching area for tileKey = '+e.xYZ
+          console.log '_fileStatusDeferred: prefetching area for tileKey = '+xYZ
           e = MC._tileLoadQueue[xY]
-          #view = {zoom: e.xYZ[2], tile: {column: e.xYZ[0], row: e.xYZ[1]}, subdomain: e.viewSubdomain}
+         #view = {zoom: e.xYZ[2], tile: {column: e.xYZ[0], row: e.xYZ[1]}, subdomain: e.viewSubdomain}
           x = parseInt(MC._map.project(MC._map.getCenter()).x/256)
           y = parseInt(MC._map.project(MC._map.getCenter()).y/256)
           view = {zoom: MC._map.getZoom(), tile: {column: x, row: y}, subdomain: e.viewSubdomain}
@@ -357,8 +317,7 @@ class window.VoyageX.MapControl
       for xY in Object.keys(MC._tileLoadQueue)
         e = MC._tileLoadQueue[xY]
         if e.xYZ.toString() == xYZ.toString()
-          #console.log '### _fileStatusDeferred: removing tileKey = '+e.xYZ
-          console.log '### _fileStatusDeferred: removing tileKey = '+e.xYZ
+          console.log '_fileStatusDeferred: removing tileKey = '+e.xYZ
           #MC._tileLoadQueue.splice idx, 1
           delete MC._tileLoadQueue[xY]
           mc._saveCallsToFlushCount -= 1
@@ -419,8 +378,7 @@ class window.VoyageX.MapControl
 
   _prefetchArea: (view, radiusMeters, deferredModeParams = null) ->
     xYZ = [view.tile.column, view.tile.row, view.zoom]
-#    centerTile = null
-    console.log 'area-prefetch-base: '+Comm.StorageController.tileKey([xYZ[0], xYZ[1], xYZ[2]])
+    console.log '_prefetchArea: area-prefetch-base: '+Comm.StorageController.tileKey([xYZ[0], xYZ[1], xYZ[2]])
     curTileWidthMeters = this.curTileWidthToMeters()
     numTilesLeft = 0
     while radiusMeters - curTileWidthMeters > 0
@@ -432,28 +390,6 @@ class window.VoyageX.MapControl
                   xYZ[1]+addToY,
                   xYZ[2]]
         this._prefetchTile view, curXYZ, deferredModeParams, (addToX == 0 && addToY == 0)
-        # # condition only required if Comm.StorageController.isFileBased()
-        # unless @_tileLoadQueue[curXYZ[0]+'_'+curXYZ[1]]
-        #   storeKey = Comm.StorageController.tileKey([curXYZ[0], curXYZ[1], curXYZ[2]])
-        #   if Comm.StorageController.isFileBased()
-        #     prefetchParams = { loadTileDataCB: this.loadReadyImage,\
-        #                        view: deferredModeParams.view,\
-        #                        xYZ: curXYZ,\
-        #                        tileUrl: MapControl.toUrl(curXYZ, view.subdomain),\
-        #                        prefetchZoomLevels: true,\
-        #                        save: true,\
-        #                        deferred: $.Deferred(),\
-        #                        promise: null }
-        #     prefetchParams.promise = prefetchParams.deferred.promise()
-        #     if addToX == 0 and addToY == 0
-        #       Comm.StorageController.instance().loadAndPrefetchTile prefetchParams
-        #     else
-        #       Comm.StorageController.instance().prefetchTile prefetchParams
-        #   else
-        #     stored = Comm.StorageController.instance().getTile curXYZ, deferredModeParams
-        #     unless stored?
-        #       console.log 'prefetching area tile: '+storeKey
-        #       readyImage = MapControl.loadAndPrefetch curXYZ, view.subdomain, deferredModeParams
 
   # fetch all tiles for next higher zoom-level.
   # 1 level difference -> 4 tiles, 2 level -> 16, ...

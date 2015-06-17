@@ -54,17 +54,8 @@ class MainController < ApplicationController
 #   "metro_code"=>0}>
   end
 
-#  def context_nav
-#    nearby_m = (tmp_user.search_radius_meters||20000)
-#    location = Location.new latitude: params[:lat], longitude: params[:lng]
-## GOOD but now from template ...  load_location_data location, nearby_m
-#    render "main/context_nav", layout: false, formats: [:js]
-#  end
-
   # chrome://appcache-internals/
   def manifest
-    #mf = Rails.root.join('app', 'views', 'main', 'voyagex.mf')
-    #render file: mf, formats: ['mf'], content_type: 'text/cache-manifest'
     render 'voyagex.mf', layout: false, content_type: 'text/cache-manifest'
   end
 

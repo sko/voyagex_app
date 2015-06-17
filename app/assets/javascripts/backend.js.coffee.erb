@@ -14,7 +14,7 @@ class window.VoyageX.Backend
   constructor: (callback) ->
     Backend._SINGLETON = this
     @_state = { online: null, pingActive: false, pingCount: 0, pingKey: -1 }
-    this.pingBackend callback
+    this.pingBackend callback, ['user']
 
   commConnStateCB: (online) ->
     if online
@@ -32,18 +32,24 @@ class window.VoyageX.Backend
       setTimeout "VoyageX.Backend.instance().pingBackend()", Backend._PING_INTERVAL_MILLIS
 
   # backend needs it's own ping because app can be online when backend is down.
-  pingBackend: (callback = null) ->
+  pingBackend: (callback = null, flags = null) ->
     @_state.pingActive ||= true
     pingKey = Math.round(Math.random() * 100000)
+    url = '<%= comm_ping_path(key: ':key') %>'.replace(/:key/, pingKey)
+    if flags?
+      flagParams = ''
+      for flag, idx in flags
+        flagParams += ((if idx >= 1 then '&' else '')+'flags[]='+flag)
     $.ajax
       type: 'GET'
-      url: '<%= comm_ping_path(key: ':key') %>'.replace(/:key/, pingKey)
+      url: url
+      data: if flagParams? then flagParams else null
       dataType: 'json'
     .done (msg) ->
         Backend.instance()._state.pingKey = msg.ping_key
         Backend.instance()._state.online = true
         if callback?
-          callback true
+          callback true, msg
         else
           unless APP._online
             APP.setOnline()

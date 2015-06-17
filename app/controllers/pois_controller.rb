@@ -17,6 +17,14 @@ class PoisController < ApplicationController
   def pull_pois
     @user = tmp_user
 
+    @user.update_attributes search_radius_meters: params[:radius]
+    location = nearby_location(Location.new(latitude: params[:lat], longitude: params[:lng]), 10)
+    if location.persisted?
+      @user.snapshot.update_attributes location: location, lat: nil, lng: nil
+    else
+      @user.snapshot.update_attributes location: nil, lat: location.latitude, lng: location.longitude
+    end
+
     #if true
     if ![:development].include?(Rails.env.to_sym)
       Resque.enqueue(PostCommit, {action: 'pull_pois',

@@ -541,7 +541,7 @@ class window.VoyageX.View
     if poiId? && poiId != ''
       CHAT.addPoiLink chatType, poiId
 
-  renameAttachment: (poiNote) ->
+  changeAttachmentUrl: (poiNote) ->
     attachment = $('#poi_notes_container > div[data-id='+poiNote.id+'] div.poi_note img')
     if attachment.length >= 1
       attachment.attr('src', poiNote.attachment.url)
@@ -605,7 +605,7 @@ class window.VoyageX.View
   @instance: () ->
     @_SINGLETON
 
-jQuery ->
+#jQuery ->
   $.fn.selectRange = (start, end) ->
     if !end
       end = start

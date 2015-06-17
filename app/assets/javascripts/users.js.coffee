@@ -82,6 +82,8 @@ class window.VoyageX.Users
     #unless marker?
     #  Main.markerManager().add location, Main._markerEventsCB
 
+  # all users are saved since they might be author of poi-notes
+  # but only contacts have their fotos stored locally as well for offline-usage
   initUser: (user) ->
     flags = user.flags||{}
     delete user.flags
@@ -92,6 +94,8 @@ class window.VoyageX.Users
         USERS.refreshUserPhoto user, {peerPort: {}}, (u, flags) ->
             APP.storage().saveUser u, {foto: u.foto}
             APP.view().addIWantToFollow u
+      else
+        APP.storage().saveUser user
       APP.view().addIDontFollow user
     if flags.follows_me?
       if flags.i_follow?

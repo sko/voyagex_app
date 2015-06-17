@@ -8,11 +8,12 @@ module Comm
 
     LOGGER = Logger.new("#{Rails.root}/log/channels.log")
 
-    # TODO
+    # if creation of new channels by clients should be supervised/disabled then do:
     # https://github.com/jamesotron/faye-rails#model-observers
     #observe Channel, :after_create do |new_channel|
     #  ChannelsController.publish('/widgets', new_widget.attributes)
     #end
+
     channel '/system**' do
       monitor :subscribe do
         #Client igt3vtbefo1rfmo5afi7wig5y7x3vx7 subscribed to /system@8jruy0aws.
@@ -37,9 +38,7 @@ module Comm
               end
               # now that current_faye_client_id is set, the client can start to communicate
               # first it should register to it's own bidirectional channels
-              #msg = { type: :ready_notification, channel_enc_key: comm_port.channel_enc_key }
               msg = { type: :ready_notification }
-             #Comm::ChannelsController.publish("/system#{PEER_CHANNEL_PREFIX}#{subscription_enc_key[1]}", msg)
               Comm::ChannelsController.publish(channel, msg)
             end
           rescue => e
@@ -87,60 +86,17 @@ module Comm
       monitor :publish do
         # /talk@o74s558g2 - publish ### Client  ### {"type"=>"message", "userId"=>264, "text"=>"wqeqeqw\n"}
         LOGGER.debug "### #{channel} - publish ### Client #{data['fci']} ### #{data.inspect}"
+        # following code moved to filter :out since message-params might be modified due to access-restrictions
         # chat_msg = Comm::ChannelsController.add_chat_message channel, data
-        ## channel_enc_key_match = channel.match(/^.+?#{PEER_CHANNEL_PREFIX}([^\/_]+)(_p2p|)/)
-        ## if channel_enc_key_match.present?
-        ##   is_p2p = channel_enc_key_match[2] == '_p2p'
-        ##   p2p_receiver = is_p2p ? User.joins(:comm_port).where(comm_ports: {channel_enc_key: channel_enc_key_match[1]}).first : nil
-        ##   begin
-        ##     sender = User.find data['userId']
-        ##     if sender.comm_port.current_faye_client_id == data['fci']
-        ##       c_m = ChatMessage.create sender: sender, text: data['text'].strip, p2p_receiver: p2p_receiver
-        ##     else
-        ##       LOGGER.warn "!!! #{channel} - publish: fake user message: sender: #{sender.id} / #{sender.username}"
-        ##     end
-        ##   rescue => e
-        ##     LOGGER.error "!!! #{channel} - publish !!! #{e.message}"
-        ##   end
-        ## end
       end
     end
 
     channel '/map_events**' do
       filter :in do
-#[1] pry(#<FayeRails::Filter::DSL>)> message
-#=> {"channel"=>"/meta/subscribe", "clientId"=>"dv2njyqmg7yvsy4q63143faf7m4iyby", "subscription"=>"/map_events", "id"=>"b"}
-#[2] pry(#<FayeRails::Filter::DSL>)> 
-#Inbound message {"channel"=>"/meta/subscribe", "clientId"=>"adv6zxtpglnbcovod8ecbu4wwb2ykkm", "subscription"=>"/map_events@rxbcin9nc", "id"=>"4"}.
         block_msg = nil
         LOGGER.debug ">>> #{message}. (self: #{self.hash} / #{self.object_id})"
         if message['channel'].match(/^\/meta\/subscribe/).present?
           block_msg = Comm::ChannelsController.check_subscribe_permission message
-          # subscription_enc_key = message['subscription'].match(/^.+?#{PEER_CHANNEL_PREFIX}([^\/]+)/)
-          # if subscription_enc_key.present?
-          #   LOGGER.debug ">>> found subscription_enc_key '#{subscription_enc_key[1]}'"
-          #   begin
-          #     user_comm_port = CommPort.where(current_faye_client_id: message['clientId']).first
-          #     if user_comm_port.present?
-          #       target = CommPort.where(channel_enc_key: subscription_enc_key[1]).first
-          #       # allow self-subscription so that others can communicate with me
-          #       granted = target.present? &&
-          #                 (target.current_faye_client_id == message['clientId'] ||
-          #                  target.comm_peers.where(peer_id: user_comm_port.user.id, granted_by_user: true).present?)
-          #       if granted
-          #         LOGGER.debug ">>> allow subscription on channel #{message['subscription']} for user #{user_comm_port.user.id}"
-          #       else
-          #         LOGGER.debug ">>> deny subscription on channel #{message['subscription']} for user #{user_comm_port.user.id} because grant missing"
-          #         block_msg = 'grant required for subscription'
-          #       end
-          #     else
-          #       LOGGER.debug ">>> deny subscription on channel #{message['subscription']} because user not signed in"
-          #       block_msg = 'only subscribable for signed in users...'
-          #     end
-          #   rescue => e
-          #     LOGGER.error "!!!!!! #{e.message}"
-          #   end
-          # end
         end
         if block_msg.nil?
           pass
@@ -149,10 +105,6 @@ module Comm
         end
       end
       filter :out do
-#[1] pry(#<FayeRails::Filter::DSL>)> message
-#=> {"channel"=>"/map_events", "data"=>{"type"=>"click", "userId"=>"129", "lat"=>51.377941781653284, "lng"=>7.493147850036621}, "clientId"=>"l80967ybiset8aevchha4z6bmkqnced", "id"=>"r"}
-#[2] pry(#<FayeRails::Filter::DSL>)> message.class
-#=> Hash
         LOGGER.debug "<<< #{message}."
         publish_data = message['data']
         if publish_data.present?
@@ -254,27 +206,6 @@ module Comm
       end
       monitor :publish do
         LOGGER.debug "### #{channel} - publish ### Client #{client_id} ### #{data.inspect}"
-        # begin
-        #   case data['type']
-        #   when 'move'
-        #     user = User.where(id: data['userId']).first
-        #     location = nearby_location Location.new(latitude: data['lat'], longitude: data['lng']), 10
-        #     if location.persisted?
-        #       user.snapshot.location = location
-        #       user.snapshot.lat = nil
-        #       user.snapshot.lng = nil
-        #       user.snapshot.address = nil
-        #     else
-        #       user.snapshot.location = nil
-        #       user.snapshot.lat = location.latitude
-        #       user.snapshot.lng = location.longitude
-        #       user.snapshot.address = shorten_address location, true
-        #     end
-        #     user.snapshot.save!
-        #   end
-        # rescue => e
-        #   LOGGER.error "!!!!!! #{e.message}"
-        # end
       end
     end
 

@@ -6,6 +6,9 @@ class window.VoyageX.CacheStrategy
     CacheStrategy._SINGLETON = this
     @_pathPrediction = pathPrediction
 
+  togglePathPrediction: () ->
+    @_pathPrediction = !@_pathPrediction
+
   getLoadTileFromUrlCB: (cacheHints = null) ->
     if @_pathPrediction && ((!cacheHints?) || (!cacheHints.default))
       (view, deferredModeParams = null, cache = false) ->

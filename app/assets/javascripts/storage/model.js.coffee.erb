@@ -156,12 +156,12 @@ class window.Storage.Model
         for poi, i in pois
           Model._syncPoi poi, callback
 
-  loadUsers: (callback, locationId = -1) ->
+  loadUsers: (callback) ->
     if APP.isOnline()
       $.ajax
         type: 'GET'
         dataType: 'json'
-        url: '<%= peers_path(location_id: ':location_id') %>'.replace(/:location_id/, locationId)
+        url: '<%= users_path %>'
       .done (msg) ->
           numUsers = msg.length
           for user, i in msg
@@ -176,22 +176,21 @@ class window.Storage.Model
           #existingPoiNotes = Comm.StorageController.get Comm.StorageController.poiKey({id: poiId})
     else
       if (Modernizr.localstorage)
-        if locationId == -1
-          peers = APP.storage().getPeers()
-        else
-          # TODO peers = APP.storage().peerssWithinSearchBounds(UTIL.searchBounds(lat, lng, APP.user().searchRadiusMeters))
-          console.log('TODO: implement search redius for peers ...')
-          peers = APP.storage().getPeers()
+        peers = APP.storage().getPeers()
         for peer in peers
           callback peer
 
   pullPois: () ->
+    lastLoc = APP.user().getLastLocation()
     $.ajax
       type: 'POST'
 #      beforeSend: (xhr) ->
 #          xhr.setRequestHeader('X-CSRF-Token', $('meta[name=csrf-token]').first().attr('content'))
       dataType: 'json'
-      url: '<%= pull_pois_path %>'
+      url: '<%= pull_pois_path(lat: ':lat', lng: ':lng', radius: ':r') %>'.
+           replace(/:lat/, lastLoc.lat).
+           replace(/:lng/, lastLoc.lng).
+           replace(/:r/, APP.user().searchRadiusMeters)
       data: { commit_hash: APP.user().curCommitHash }
     .done (res) ->
         console.log('res.message OK = '+(res.message=='OK'))
@@ -411,7 +410,8 @@ class window.Storage.Model
   syncWithStorage: (poi, note, callback, loadStats = {numAdded:1,numLeft:1,newNotes:[]}, attachmentCached = false) ->
     # store user
     if note.user?
-      APP.storage().saveUser note.user
+      unless APP.storage().get('comm.currentUser') || APP.storage().get('comm.users', note.user.id)
+        APP.storage().saveUser note.user
       note.userId = note.user.id
       delete note.user
     if note.attachment? && (!note.attachment.content_type.match(/^embed:/))
@@ -428,7 +428,7 @@ class window.Storage.Model
       else if (typeof attachmentUrl.then == 'function') 
         # Assume we are dealing with a promise.
         attachmentUrl.then (url) ->
-            console.log 'Model - syncWithStorage: attachmentUrl-promise resolved to: '+url
+            console.log 'Model - syncWithStorage: attachmentUrl-promise resolved to: '+url.substring(0, 80)
             note.attachment.url = url
             loadStats.numLeft -= 1
             Model._syncNewPoiNotes poi, note, loadStats, callback
@@ -494,45 +494,22 @@ class window.Storage.Model
         return idx
     -1
 
-#  @poiNotes: (newPoiNotes, storedPoiNotes) ->
-#    # poinotes must always be sorted by id, also indicating their age-relation
-#    merged = []
-#    sIdx = 0
-#    for nIdx in [0..newPoiNotes.length-1] by 1
-#      for i in [sIdx..storedPoiNotes.length-1] by 1
-#        sIdx = i+1
-#        if newPoiNotes[nIdx].id < storedPoiNotes[i].id
-#          merged.push newPoiNotes[nIdx]
-#          for j in [nIdx..newPoiNotes.length-1] by 1
-#            if newPoiNotes[j].id < storedPoiNotes[i].id
-#              merged.push newPoiNotes[nIdx]
-#            break
-#        else
-#          merged.push storedPoiNotes[i]
-#      if i >= storedPoiNotes.length
-#        break
-#    # TODO add remaining poiNotes - only one of the following will continue
-#    for i in [nIdx..newPoiNotes.length-1] by 1
-#      merged.push newPoiNotes[i]
-#    for i in [sIdx..storedPoiNotes.length-1] by 1
-#      merged.push storedPoiNotes[i]
-#    merged
+  @deferredModePoiNoteAttachmentParams: (poiNote) ->
+    deferred = $.Deferred()
+    deferredModeParams = { fileUrl: Model.attachmentUrl,\
+                           fileMeta: UTIL.clone(poiNote.attachment, {type: 'poiNoteAttachment'}),\
+                           fileOwner: poiNote,\
+                           #save: true,\
+                           update: true,\
+                           deferred: deferred,\
+                           promise: deferred.promise() }
 
   @_viewPoiNoteAttachment: (poiNote) ->
     storeKey = Comm.StorageController.poiNoteAttachmentKey poiNote
     if Comm.StorageController.isFileBased()
       # use File-API
       console.log '_viewPoiNoteAttachment - ........................................'+storeKey
-      # TODO ? maybe just query offline-zoom-files - see MapControl.tileUrl else of if view.zoom in mC._offlineZooms
-      # NO - because other zoom-levels may trigger some extra-action (liek prefetch ...)
-      deferred = $.Deferred()
-      deferredModeParams = { fileUrl: Model.attachmentUrl,\
-                             fileMeta: poiNote.attachment,\
-                             fileOwner: poiNote,\
-                             save: true,\
-                             update: true,\
-                             deferred: deferred,\
-                             promise: deferred.promise() }
+      deferredModeParams = Model.deferredModePoiNoteAttachmentParams poiNote
       APP.storage().getPoiNoteAttachment poiNote, deferredModeParams
       deferredModeParams.promise
     else
@@ -553,21 +530,28 @@ class window.Storage.Model
         APP.storage().resolveOfflineNotInCache readyImage, deferredModeParams
       readyImage
 
+  @notInCacheImage: (fileMeta) ->
+    if fileMeta.type == 'poiNoteAttachment'
+      APP.model()._notInCacheImage $('#attachment_canvas')[0], fileMeta
+    else
+      APP.model()._notInCacheImage $('#user_foto_canvas')[0], fileMeta
+
+  @deferredModeUserPhotoParams: (user) ->
+    deferred = $.Deferred()
+    deferredModeParams = { fileUrl: Model.userPhotoUrl,\
+                           fileMeta: UTIL.clone(user.foto, {type: 'userFoto'})
+                           fileOwner: user,\
+                           #save: true,\
+                           update: true,\
+                           deferred: deferred,\
+                           promise: deferred.promise() }
+
   @_viewUserFoto: (user) ->
     storeKey = Comm.StorageController.userPhotoKey user
     if Comm.StorageController.isFileBased()
       # use File-API
       console.log '_viewUserFoto - ........................................'+storeKey
-      # TODO ? maybe just query offline-zoom-files - see MapControl.tileUrl else of if view.zoom in mC._offlineZooms
-      # NO - because other zoom-levels may trigger some extra-action (liek prefetch ...)
-      deferred = $.Deferred()
-      deferredModeParams = { fileUrl: Model.userPhotoUrl,\
-                             fileMeta: user.foto,\
-                             fileOwner: user,\
-                             save: true,\
-                             update: true,\
-                             deferred: deferred,\
-                             promise: deferred.promise() }
+      deferredModeParams = Model.deferredModeUserPhotoParams user
       APP.storage().getUserPhoto user, deferredModeParams
       deferredModeParams.promise
     else
@@ -579,7 +563,6 @@ class window.Storage.Model
         console.log 'using cached userPoto: '+storeKey
         stored
 
-  # 
   @userPhotoUrl: (user, deferredModeParams = null) ->
     if APP.isOnline()
       Model.storedUserPhoto user, deferredModeParams
@@ -592,20 +575,14 @@ class window.Storage.Model
   @storedUserPhoto: (user, deferredModeParams = null) ->
     if Comm.StorageController.isFileBased()
       unless deferredModeParams?
-        deferred = $.Deferred()
-        deferredModeParams = { fileUrl: Model.userPhotoUrl,\
-                               fileMeta: user.foto,\
-                               fileOwner: user,\
-                               save: true,\
-                               update: true,\
-                               deferred: deferred,\
-                               promise: deferred.promise() }
+        deferredModeParams = Model.deferredModeUserPhotoParams user
       APP.model()._loadReadyUserPhoto user, deferredModeParams
       deferredModeParams.promise
     else
       readyImage = APP.storage().getUserPhoto user, deferredModeParams
       unless readyImage?
         readyImage = APP.model()._loadReadyUserPhoto user, deferredModeParams
+      readyImage
 
   cacheAttachment: (poiNote, deferredModeParams = null) ->
     if Comm.StorageController.isFileBased()

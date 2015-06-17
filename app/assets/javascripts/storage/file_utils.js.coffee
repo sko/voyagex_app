@@ -62,17 +62,6 @@ class window.Comm.FileUtils
     if flags.users? && flags.users
       this._removeDirectory 'users'
 
-  deleteAttachment: (poiNoteId, callback) ->
-    @_dirReaders.entry.getFile '/poiNotes/attachments/'+poiNoteId, {}, (fileEntry) ->
-        fileEntry.remove (e) ->
-              console.log 'clear: deleted file /poiNotes/attachments/'+poiNoteId
-              if callback?
-                callback 'ok: '+poiNoteId
-            , (error) ->
-                console.log 'clear: error when deleting /poiNotes/attachments/'+poiNoteId+': '+error
-                if callback?
-                  callback 'error: '+poiNoteId+' - '+error
-
   clear: (flags = {tilePaths: [], poiNoteIds: [], userIds: []}, callback = null) ->
     if flags.tilePaths?
       for tilePath in tilePaths
@@ -441,6 +430,25 @@ class window.Comm.FileUtils
   getPoiNoteAttachmentFile: (poiNote, deferredModeParams) ->
     path = '/poiNotes/attachments/'+poiNote.id
     this._getFile path, poiNote.attachment, poiNote, deferredModeParams
+
+  deleteAttachment: (poiNoteId, callback) ->
+    @_dirReaders.entry.getFile '/poiNotes/attachments/'+poiNoteId, {}, (fileEntry) ->
+        fileEntry.remove (e) ->
+              console.log 'clear: deleted file /poiNotes/attachments/'+poiNoteId
+              if callback?
+                callback 'ok: '+poiNoteId
+            , (error) ->
+                console.log 'clear: error when deleting /poiNotes/attachments/'+poiNoteId+': '+error
+                if callback?
+                  callback 'error: '+poiNoteId+' - '+error
+
+  renameAttachment: (oldName, newName, callback) ->
+    @_dirReaders.entries['poiNotes'].entries['attachments'].entry.getFile oldName, {}, (fileEntry) ->
+        fileEntry.moveTo APP.storage()._fileUtils._dirReaders.entries['poiNotes'].entries['attachments'].entry, newName
+       #fileEntry.moveTo APP.storage()._fileUtils._dirReaders.entry.getDirectory '/poiNotes/attachments/'
+        callback()
+      , (e) ->
+          console.log('renameAttachment - '+e)
   
   getUserPhotoFile: (user, deferredModeParams) ->
     path = '/users/photos/'+user.id
