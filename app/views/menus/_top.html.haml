@@ -53,6 +53,15 @@
           %br
           %div
             %span#cache_stats{style: 'margin-left: 10px;'}
+        #var_ctrls{style: 'float:left; font-size: 11px; padding: 0px 0px 0px 10px; color: #ffffff;'}
+          %div
+            = link_to 'dbg', '#', onclick: "javascript:APP.toggleDebug();", class: 'menu_link', id: 'dbg_ctrl'
+          %div
+            = link_to('#', onclick: "javascript:APP.toggleCacheStrategy();", class: 'menu_link') do 
+              %span{id: 'cs_ctrl_radius', style: 'color: green; display: none;'}
+                radius
+              %span{id: 'cs_ctrl_pathpred', style: 'color: green;'}
+                path-pred
         #cache_debug{style: 'float: left; font-size: 11px; padding: 0px 0px 0px 10px; color: #ffffff;'}
           %div
             = link_to 'toggle-dbg-pred', '#', onclick: "javascript:APP.togglePredictionPathDebug();", class: 'menu_link', id: 'dbg_pred_ctrl'

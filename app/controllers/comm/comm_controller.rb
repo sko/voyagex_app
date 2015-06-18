@@ -30,7 +30,6 @@ module Comm
       end
       if user_signed_in?
         if params[:subscribe_to_peers] == 'true'
-#binding.pry
           subscribe_user_to_peers @user
         end
       end

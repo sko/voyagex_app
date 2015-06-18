@@ -54,15 +54,15 @@ class UsersController < ApplicationController
       @user.follows.each do |followee|
         c_m_d = ChatMessageDelivery.where(subscriber: @user, channel: "/talk#{PEER_CHANNEL_PREFIX}#{followee.comm_port.channel_enc_key}").first
         c_m_d = ChatMessageDelivery.create(subscriber: @user, channel: "/talk#{PEER_CHANNEL_PREFIX}#{followee.comm_port.channel_enc_key}", last_message_id: -1) unless c_m_d.present?
-#binding.pry
-        query = ChatMessage.where(t[:sender_id].eq(followee.id).and(t[:id].gt(c_m_d.last_message_id)))
+        query = ChatMessage.where(t[:sender_id].eq(followee.id).
+                            and(t[:p2p_receiver_id].eq(nil)).
+                            and(t[:id].gt(c_m_d.last_message_id)))
         if query.count >= 1
           c_ms = []
           chat_messages[:bc] << { followee.id => c_ms }
           query.order(:id).each do |c_m|
             c_ms << {id: c_m.id, created_at: c_m.created_at.strftime("%Y-%m-%d %H:%M:%S"), text: c_m.text}
           end
-#binding.pry
           c_m_d.update_attribute :last_message_id, c_ms.last[:id]
         end
       end
@@ -128,20 +128,11 @@ class UsersController < ApplicationController
     end
     if params[:grant].present?
       # comm_peer expected 
-      # when a peer requests a grant then a comm_peer is created with status granted_by_user = false
       peer_ids = params[:grant][:comm_peers].inject([[],[]]){|res,kv|kv[1]=='true'?res[0]<<kv[0]:res[1]<<kv[0];res}
       peer_ids[0].each do |peer_id|
         peer = User.find peer_id
         if @user.grant_to_follow(peer)
           @subscription_granted << peer
-        # comm_peer = @user.comm_port.comm_peers.find{|c_p|c_p.peer_id==peer_id.to_i}
-        # unless comm_peer.present? && comm_peer.granted_by_user
-        #   if comm_peer.present?
-        #     comm_peer.update_attribute(:granted_by_user, true)
-        #   else
-        #     comm_peer = @user.comm_port.comm_peers.create peer: User.find(peer_id), :granted_by_user, true
-        #   end
-        #  peer_sys_channel_enc_key = comm_peer.peer.comm_port.sys_channel_enc_key
           peer_sys_channel_enc_key = peer.comm_port.sys_channel_enc_key
           # notify peer that his subscription-request is granted from @user
           #msg = { type: :subscription_granted, peer: { id: @user.id, username: @user.username, channel_enc_key:  @user.comm_port.channel_enc_key } }

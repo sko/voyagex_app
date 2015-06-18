@@ -36,6 +36,7 @@ class window.VoyageX.ClientState
   
   menuNavClick: (clickSrc) ->
     this.setView this.getView(clickSrc)
+    window.location.hash = (if clickSrc == 'chat' then 'conference' else clickSrc)
 
   currentView: () ->
     @_views[@_currentViewKey]

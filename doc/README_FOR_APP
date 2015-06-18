@@ -35,6 +35,21 @@ UPLOADS.upload (uploadDataTypeHandler)
 
 
 ##########################
+merge voyagex and voyagex_app
+
+git remote set-url origin github:/sko/voyagex
+git fetch
+git merge --strategy-option theirs --squash origin/master
+git branch
+git remote set-url origin github:sko/voyagex_app
+git status
+git add -u
+git commit -m "cleanups and fixes II"
+git push origin master
+
+
+
+##########################
 map: iPhone 4: mob-resol: 320x500
 settings: iPhone 6: mob-resol: 375x600
 

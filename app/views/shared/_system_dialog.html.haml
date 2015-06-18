@@ -46,8 +46,14 @@
       %span{style: 'float: left; padding: 0px 0px 0px 5px;'}
         %a{href: '#', onclick: "javascript:APP.showPeer(APP.storage().getUser({user_id}), {id: {lastLocationId}, lat: {lastLat}, lng: {lastLng}, address: '{lastAddress}'.trim()!='' ? '{lastAddress}' : null}, 'popup');"} show
 
-  #tmpl_message_received_popup{style: 'display: none;'}
+  #tmpl_bc_message_received_popup{style: 'display: none;'}
     %span{style: 'color:black;'}
-      Message Received
-      %button{class: 'activate_chat'}
+      Conference-Message Received from {peerUsername}
+      %button{class: 'activate_bc_chat'}
+        show
+
+  #tmpl_p2p_message_received_popup{style: 'display: none;'}
+    %span{style: 'color:black;'}
+      P2P-Message Received from {peerUsername}
+      %button{class: 'activate_p2p_chat', data: {peer: {id: '{peerId}'}}}
         show

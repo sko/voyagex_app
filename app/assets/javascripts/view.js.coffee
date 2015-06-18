@@ -24,6 +24,28 @@ class window.VoyageX.View
         $(this).closest('form').submit()
     $(document).on 'click', '#user_foto_file_input_init', (event) ->
       APP.view().userFotoFileInputInit()
+    $(document).on 'click', '.activate_bc_chat', (event) ->
+      # only get here if conference/chat was not foreground
+      VIEW_MODEL.menuNavClick('chat')
+      peer = APP.storage().getUser parseInt($(this).attr('data-peer-id'))
+      APP.view().scrollToLastChatMessage peer
+      if stopSound?
+        stopSound()
+      GUI.closeSystemMessage('popup')
+    $(document).on 'click', '.activate_p2p_chat', (event) ->
+      # only get here if map was not foreground or other popup was open
+      unless VIEW_MODEL.currentView().key == 'map'
+        VIEW_MODEL.menuNavClick('map')
+      peer = APP.storage().getUser parseInt($(this).attr('data-peer-id'))
+      oPM = APP.getOpenPopupMarker(true)
+      unless oPM? && oPM.m.isPeerMarker() && (oPM.m._flags.peer.id == peer.id)
+        # TODO check whether save note/bookmark is required when closing other marker
+        VoyageX.TemplateHelper.openPeerPopup peer, APP.markers().forPeer(peer.id).target()
+        VoyageX.TemplateHelper.openP2PChat peer
+        APP.view().scrollToLastChatMessage peer, true
+      if stopSound?
+        stopSound()
+      GUI.closeSystemMessage('popup')
 
   addListener: (channel, callBack) ->
     @_commListeners[channel].push(callBack)
@@ -54,9 +76,40 @@ class window.VoyageX.View
     console.log 'got a talk - message: ' + message.type
     switch message.type
       when 'message'
+        if $('.chat_view').children().length == 0
+          CHAT.initBCChatMessages()
         View.addChatMessage message, false
+        unless VIEW_MODEL.currentView().key == 'chat'
+          window.stopSound = VoyageX.MediaManager.instance().playSound(VoyageX.SOUNDS_MSG_IN_PATH)
+          GUI.showSystemMessage (systemMessageDiv) ->
+              systemMessageDiv.html $('#tmpl_bc_message_received_popup').html().
+                                    replace(/\{peerUsername\}/, message.peer.username)
+            , null, 'popup'
       when 'p2p-message'
-        View.addChatMessage message, false, {peer: message.peer}
+        if VIEW_MODEL.currentView().key != 'map'
+          window.stopSound = VoyageX.MediaManager.instance().playSound(VoyageX.SOUNDS_MSG_IN_PATH)
+          GUI.showSystemMessage (systemMessageDiv) ->
+              systemMessageDiv.html $('#tmpl_p2p_message_received_popup').html().
+                                    replace(/\{peerId\}/, message.peer.id).
+                                    replace(/\{peerUsername\}/, message.peer.username)
+            , null, 'popup'
+        else
+          oPM = APP.getOpenPopupMarker(true)
+          if oPM?
+            if oPM.m.isPeerMarker() && (oPM.m._flags.peer.id == message.peer.id)
+              if VIEW_MODEL.currentView().key == 'map'
+                View.addChatMessage message, false, {peer: message.peer}
+              else
+                window.stopSound = VoyageX.MediaManager.instance().playSound(VoyageX.SOUNDS_MSG_IN_PATH)
+                GUI.showSystemMessage (systemMessageDiv) ->
+                    systemMessageDiv.html $('#tmpl_p2p_message_received_popup').html().
+                                          replace(/\{peerId\}/, message.peer.id).
+                                          replace(/\{peerUsername\}/, message.peer.username)
+                  , null, 'popup'
+          else
+            VoyageX.TemplateHelper.openPeerPopup message.peer, APP.markers().forPeer(message.peer.id).target()
+            VoyageX.TemplateHelper.openP2PChat message.peer
+            View.addChatMessage message, false, {peer: message.peer}
     for listener in View.instance()._commListeners.talk
       listener(message)
 
@@ -235,24 +288,6 @@ class window.VoyageX.View
     #TODO2 ... enters radius - notification, state = within, leaves radius: state = withour
     path = APP.storage().getPath peer
 
-    # moved to APP - always save peer position
-    # sBs = UTIL.searchBounds lat, lng, APP.user().searchRadiusMeters
-    # curUserLatLng = APP.getSelectedPositionLatLng()
-    # if UTIL.withinSearchBounds(curUserLatLng[0], curUserLatLng[1], sBs) || path?
-    #   #markerMeta = VoyageX.Main.markerManager().forPeer peerId
-    #   #closestLocation = APP.storage().getLocalLocation curUserLatLng[0], curUserLatLng[1]
-    #   peerLocation = APP.storage().getLocalLocation lat, lng
-    #   unless peerLocation?
-    #     peerLocation = APP.storage().saveLocation {id: -peer.id, lat: lat, lng: lng}
-    #   markerMeta = APP.getPeerMarker peer, peerLocation, true
-    #   markerMeta.m.setLocation peerLocation # {lat: lat, lng: lng}
-    #   unless true || APP.view()._alertOn
-    #     APP.view().alert()
-    # else
-    #   console.log 'setPeerPosition: outside searchbounds ...'
-    #   # remove from $('#people_of_interest')
-    #   # set state outside with algorithm
-    #   APP.markers().removeForPeer peerId
     markerMeta = APP.getPeerMarker peer, location, true
     markerMeta.m.setLocation location # {lat: lat, lng: lng}
 

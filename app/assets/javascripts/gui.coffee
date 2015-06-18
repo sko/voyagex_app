@@ -84,7 +84,9 @@ class window.VoyageX.Gui
           width: Math.abs($(window).width() * 0.25),
           modal: true
         })
-
+    $("#system_message_popup").on 'dialogclose', (event, ui) ->
+        if window.stopSound?
+          stopSound()
     $("#context_nav_panel").tabs()
   
   _addUser: () ->

@@ -23,6 +23,9 @@ class window.VoyageX.Gui
       VIEW_MODEL.menuNavClick('map')
     $(document).on 'click', '.activate_upload', (event) ->
       VIEW_MODEL.menuNavClick('home')
+    $("#system_message_popup").on 'popupafterclose', (event, ui) ->
+        if window.stopSound?
+          stopSound()
     $("#context_nav_tabs").tabs()
     if $.mobile
       # actually jquery-mobile should be available here

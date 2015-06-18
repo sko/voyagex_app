@@ -107,6 +107,7 @@
 /assets/main.js?body=1
 /assets/view.js?body=1
 /assets/gui.js?body=1
+/assets/extensions.js?body=1
 /comm/faye-browser.js
 /assets/comm/comm.js?body=1
 /assets/application.js?body=1

@@ -227,26 +227,16 @@ class window.Storage.Model
         p2pSenderIds = Object.keys(res['p2p'])
         for peerId in p2pSenderIds
           peer = APP.storage().getUser peerId
-#          lastMsgId = -1
           for message in res['p2p'][peerId]
-#            if message.id > lastMsgId
-#              lastMsgId = message.id
             APP.storage().addChatMessage message.text, peer, peer
-#          # notify backend of last received p2p-message
-#          APP.model().chatMessageReceived lastMsgId, peer
-#        lastMsgId = -1
         for bcPeerMessages in res['bc']
           bcSenderId = Object.keys(bcPeerMessages)[0]
           peer = APP.storage().getUser bcSenderId
           for message in bcPeerMessages[bcSenderId]
-#            if message.id > lastMsgId
-#              lastMsgId = message.id
             message.type = 'message'
             message.peer = peer
             APP.storage().addChatMessage message.text, peer
             APP._view._talkCB message
-#        # notify backend of last received bc-message
-#        APP.model().chatMessageReceived lastMsgId, peer
         Comm.Comm.instance()._sendMessageQueue()
     .fail (jqXHR, textStatus) ->
       # get from localStorage

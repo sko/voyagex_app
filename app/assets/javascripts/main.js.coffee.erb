@@ -287,11 +287,28 @@ class window.VoyageX.Main
         $('#network_state_offline').prop('checked', true)
       GUI.showActiveState()
 
+  toggleDebug: () ->
+    if @_debug
+      $('#dbg_ctrl').attr('class', $('#dbg_ctrl').attr('class').replace(/\s?menu_ctrl_on/, ''))
+    else
+      $('#dbg_ctrl').attr('class', $('#dbg_ctrl').attr('class')+' menu_ctrl_on')
+    @_debug = !@_debug
+
   toggleNetworkState: (selected) ->
     if selected.id == 'network_state_online'
       APP.setOnline()
     else
       APP.setOffline()
+
+  toggleCacheStrategy: () ->
+    if @_pathPrediction
+      $('#cs_ctrl_radius').show()
+      $('#cs_ctrl_pathpred').hide()
+    else
+      $('#cs_ctrl_radius').hide()
+      $('#cs_ctrl_pathpred').show()
+    @_pathPrediction = !@_pathPrediction
+    APP._cacheStrategy.togglePathPrediction()
 
   isMobile: () ->
     GUI.isMobile()
@@ -487,7 +504,8 @@ class window.VoyageX.Main
 
   showPOIs: (location, flags = {withNotes: true, reset: false}) ->
     if VIEW_MODEL.currentView().key != 'map'
-      VIEW_MODEL.setView VIEW_MODEL.getView('map')
+      #VIEW_MODEL.setView VIEW_MODEL.getView('map')
+      VIEW_MODEL.menuNavClick('map')
     APP.model().loadPois UTIL.trimPosVal(location.lat), UTIL.trimPosVal(location.lng), (poi) ->
         location = {id: poi.locationId, lat: poi.lat, lng: poi.lng, address: poi.address, poiId: poi.id}
         markerMeta = APP.getMarker poi, true
@@ -498,7 +516,8 @@ class window.VoyageX.Main
 
   showPOI: (poiId, poiNoteId, skipLoad = false) ->
     if VIEW_MODEL.currentView().key != 'map'
-      VIEW_MODEL.setView VIEW_MODEL.getView('map')
+      #VIEW_MODEL.setView VIEW_MODEL.getView('map')
+      VIEW_MODEL.menuNavClick('map')
     if skipLoad
       APP.view().viewPoiNotes APP.storage().getPoi(poiId), poiNoteId
     else
@@ -508,7 +527,9 @@ class window.VoyageX.Main
 
   showPeer: (peer, lastLocation = null, type = 'dialog') ->
     GUI.closeSystemMessage(type)
-    VIEW_MODEL.setView(VIEW_MODEL.getView('map'))
+    if VIEW_MODEL.currentView().key != 'map'
+      #VIEW_MODEL.setView VIEW_MODEL.getView('map')
+      VIEW_MODEL.menuNavClick('map')
 
     unless lastLocation?
       lastLocation = peer.getLastLocation()
@@ -536,11 +557,12 @@ class window.VoyageX.Main
     @_selectedPosition.address = address
 #    if address != null
 #      $('#cur_loc_addr').html(address)
-    if @_debug # debugRealePos
+    if Main._PATH_PREDICTION? && Main._PATH_PREDICTION._debug # debugRealePos
       # path-prediction
       APP._realPosition.lat = location.lat
       APP._realPosition.lng = location.lng
       Main._PATH_PREDICTION._pathPredictionOnPosSelect()
+    if @_debug # debugRealePos
       # neighbourhood-watch
       peers = APP.storage().getPeers()
       for peer in peers
@@ -684,15 +706,16 @@ class window.VoyageX.Main
     Main._PATH_PREDICTION.clearPredictionPaths()
 
   togglePredictionPathDebug: () ->
-    if @_debug
-      @_debug = false
+    if Main._PATH_PREDICTION._debug
+      #@_debug = false
       $('#dbg_pred_ctrl').attr('class', $('#dbg_pred_ctrl').attr('class').replace(/\s?menu_ctrl_on/, ''))
     else
-      @_debug = true
+      #@_debug = true
       APP._realPosition.lat = @_selectedPosition.lat
       APP._realPosition.lng = @_selectedPosition.lng
-      Main._PATH_PREDICTION._pathPredictionOnPosSelect()
+      #Main._PATH_PREDICTION._pathPredictionOnPosSelect()
       $('#dbg_pred_ctrl').attr('class', $('#dbg_pred_ctrl').attr('class')+' menu_ctrl_on')
+    Main._PATH_PREDICTION.toggleDebug()
 
   _systemCB: (message) ->
     unless APP._online
