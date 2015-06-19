@@ -58,6 +58,7 @@ class window.VoyageX.Main
   #    a ready-callback from browser is awaited before being usable/accessible (f.ex. file-system)
   _init: (mapOptions, offlineZooms, tileHandler = null) ->
     APP._initState += 1
+    console.log 'APP._initState = '+APP._initState
     switch APP._initState
       when 1
         # the app depends on a ready-usable storage-component

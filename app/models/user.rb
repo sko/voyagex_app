@@ -136,7 +136,8 @@ class User < ActiveRecord::Base
                     email: ADMIN_EMAIL_ADDRESS.sub(/^[^@]+/, dummy_username),
                     search_radius_meters: 1000,
                     snapshot: UserSnapshot.new(location: Location.default, cur_commit: Commit.latest),
-                    foto: UserHelper::fetch_random_avatar
+                    foto: UserHelper::fetch_random_avatar,
+                    comm_port: CommPort.new(channel_enc_key: CommPort.enc_key, sys_channel_enc_key: CommPort.enc_key)
                    )
   end
 

@@ -13,9 +13,6 @@ class MainController < ApplicationController
   end
 
   def index
-    unless tmp_user.comm_port.present?
-      comm_port = CommPort.create(user: tmp_user, channel_enc_key: enc_key, sys_channel_enc_key: enc_key)
-    end
     @initial_subscribe = true
     tmp_user.update_attribute(:foto, UserHelper::fetch_random_avatar(request)) unless tmp_user.foto.exists?
     if signed_in? # registered_user?
@@ -45,7 +42,6 @@ class MainController < ApplicationController
   private
 
   def load_location_data location, nearby_m
-    #@uploads = location.nearbys((nearby_km.to_f/1.609344).round).inject([]){|res,l|l.uploads.where('uploads.location_id is not null')}
     limits = lat_lng_limits location.latitude, location.longitude, nearby_m
     limits_lat = limits[:lat_south] > limits[:lat_north] ? limits[:lat_north]..limits[:lat_south] : limits[:lat_south]..limits[:lat_north]
     limits_lng = limits[:lng_east] > limits[:lng_west] ? limits[:lng_west]..limits[:lng_east] : limits[:lng_east]..limits[:lng_west]

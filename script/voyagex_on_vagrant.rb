@@ -4,8 +4,14 @@ class InitSyncedEnv
   
   def initialize
     @script_dir = File.dirname(__FILE__)
+    @rails_env = ENV['RAILS_ENV']||'staging'
+    puts "@rails_env = #{@rails_env} (set with RAILS_ENV)"
+    check_uploads
   end
   
+  def check_uploads
+    system "RAILS_ENV=#{@rails_env} rake seed:check"
+  end
 end
 
 class InitWebapp
@@ -74,7 +80,7 @@ EOC
   
 end
 
-#FileUtils.touch 'timestamp'
+##FileUtils.touch 'timestamp'
 env = InitSyncedEnv.new
 iw = InitWebapp.new env
 iw.start_resque_worker

@@ -16,4 +16,10 @@ class CommPort < ActiveRecord::Base
     t = CommPeer.arel_table
     peers.where(t[:granted_by_user].eq(nil).or(t[:granted_by_user].eq(false)))
   end
+
+  def self.enc_key
+    src = ('a'..'z').to_a + (0..9).to_a
+    code_length = 8
+    (0..code_length).map { src[rand(36)] }.join
+  end
 end

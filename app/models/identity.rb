@@ -55,6 +55,7 @@ class Identity < ActiveRecord::Base
         identity.send("set_#{auth.provider}_information".to_sym, auth)
         user.search_radius_meters = 1000
         user.snapshot = UserSnapshot.new(location: Location.default, cur_commit: Commit.latest)
+        user.comm_port = CommPort.new(channel_enc_key: CommPort.enc_key, sys_channel_enc_key: CommPort.enc_key)
         user.skip_confirmation!
       end
       identity

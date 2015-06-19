@@ -1,20 +1,18 @@
 class Upload < ActiveRecord::Base
-  #belongs_to :user
   belongs_to :attached_to, class_name: 'PoiNote', foreign_key: :poi_note_id#, inverse_of: :attachment
   belongs_to :entity, polymorphic: true, dependent: :destroy
   belongs_to :mediafile, -> { where uploads: {entity_type: 'UploadEntity::Mediafile'} }, class_name: 'UploadEntity::Mediafile', foreign_key: :entity_id#, inverse_of: :attachment
   belongs_to :embed, -> { where uploads: {entity_type: 'UploadEntity::Embed'} }, class_name: 'UploadEntity::Embed', foreign_key: :entity_id#, inverse_of: :attachment
-  #has_many :comments, class_name: 'UploadComment', inverse_of: :upload
-  #has_one :attached_to, class_name: 'UploadComment', inverse_of: :attachment
-  #alias_attribute :attached_to, :poi_note
 
   validates :entity, presence: true
   validates_associated :entity
-  #validates :attached_to, presence: true
-  #validates_associated :attached_to
   
   def file
     entity.file
+  end
+  
+  def binary?
+    ['UploadEntity::Mediafile'].include? entity_type
   end
 
   def build_entity content_type, build_params = {}

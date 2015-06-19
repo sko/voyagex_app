@@ -17,47 +17,47 @@ module AuthUtils
 #    end
 #  end
 
-  def enc_key
-    src = ('a'..'z').to_a + (0..9).to_a
-    code_length = 8
-    (0..code_length).map { src[rand(36)] }.join
-  end
+  # def enc_key
+  #   src = ('a'..'z').to_a + (0..9).to_a
+  #   code_length = 8
+  #   (0..code_length).map { src[rand(36)] }.join
+  # end
   
-  def todo_after_sign_in_path_for resource
-    path = stored_location_for(Devise::Mapping.find_scope!(resource))
-    # assume that login-paths for any resources (artists or users or ...) have a /login[\?#]? - path-element
-    # after successful login we don't want to see the login-screen again
-    if path.present? && (!path.match(/^(https?:\/\/#{@request.env['HTTP_HOST']}|).*?\/login([\?#].*|)$/).present?)
-      if path.match(/^https?:\/\/(?!#{@request.env['HTTP_HOST']})/)
-        # other domain requested ...
-        path = root_path
-      else
-        path = root_path
-      end
-    else
-      path = nil
-      if self.is_a? OmniauthCallbacksController
-        after_omni_auth_path = get_after_sign_in_url
-        path = after_omni_auth_path if after_omni_auth_path.present?
-      end
-      path = root_path unless path.present?
-    end
-    path
-  end
+  # def todo_after_sign_in_path_for resource
+  #   path = stored_location_for(Devise::Mapping.find_scope!(resource))
+  #   # assume that login-paths for any resources (artists or users or ...) have a /login[\?#]? - path-element
+  #   # after successful login we don't want to see the login-screen again
+  #   if path.present? && (!path.match(/^(https?:\/\/#{@request.env['HTTP_HOST']}|).*?\/login([\?#].*|)$/).present?)
+  #     if path.match(/^https?:\/\/(?!#{@request.env['HTTP_HOST']})/)
+  #       # other domain requested ...
+  #       path = root_path
+  #     else
+  #       path = root_path
+  #     end
+  #   else
+  #     path = nil
+  #     if self.is_a? OmniauthCallbacksController
+  #       after_omni_auth_path = get_after_sign_in_url
+  #       path = after_omni_auth_path if after_omni_auth_path.present?
+  #     end
+  #     path = root_path unless path.present?
+  #   end
+  #   path
+  # end
 
-  def todo_after_sign_out_path_for resource
-    by_sym = resource.is_a?(Symbol)
-    if by_sym || resource.is_a?(User)
-      if by_sym
-        path = (resource==:fan_user ? fans.root_path : artists.root_path)
-      else
-        path = (resource.is_fan? ? fans.root_path : artists.root_path)
-      end
-    else
-      path = admin_root_path
-    end
-    path
-  end
+  # def todo_after_sign_out_path_for resource
+  #   by_sym = resource.is_a?(Symbol)
+  #   if by_sym || resource.is_a?(User)
+  #     if by_sym
+  #       path = (resource==:fan_user ? fans.root_path : artists.root_path)
+  #     else
+  #       path = (resource.is_fan? ? fans.root_path : artists.root_path)
+  #     end
+  #   else
+  #     path = admin_root_path
+  #   end
+  #   path
+  # end
 
   def disconnect_from_facebook
     unless current_user.connected_with_facebook?

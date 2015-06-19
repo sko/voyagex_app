@@ -1,5 +1,5 @@
 include ActionDispatch::TestProcess
-include AuthUtils
+#include AuthUtils
 
 # load in console:
 # require 'factory_girl'
@@ -30,14 +30,14 @@ FactoryGirl.define do
   
   factory :comm_port do
     user
-    channel_enc_key {enc_key}
-    sys_channel_enc_key {enc_key}
+    channel_enc_key {CommPort.enc_key}
+    sys_channel_enc_key {CommPort.enc_key}
   end
   
   factory :user_snapshot do
     user
     cur_commit {get_commit}
-    location {Location.first || Location.default}
+    location {Location.first || Location.default || FactoryGirl.create(:location)}
   end
   
   factory :commit do
@@ -45,8 +45,11 @@ FactoryGirl.define do
   end
   
   factory :location do
+    latitude 51.3767631
+    longitude 7.4941134
+    address 'Hagen, Universitätsstraße 1'
   end
-  
+
   factory :chat_message do
     sender {FactoryGirl.create(:user)}
     text 'some text'

@@ -4,6 +4,9 @@ class window.Comm.MockInit
 
   constructor: () ->
     window.console = new Comm.ConsoleMock()
+    window.VoyageX.TILE_HANDLER = new L.TileLayer.Functional(MockInit.drawTile, {
+            subdomains: ['a']
+          })
     $(document).ready () ->
       $('body').first().append('<div id="test_out"></div>')
       MOCK.out 'Modernizr.localstorage = '+Modernizr.localstorage
@@ -15,10 +18,7 @@ class window.Comm.MockInit
       catch error
         fileAPISupport = false
       MOCK.out 'fileAPISupport = '+fileAPISupport
-      APP._init APP.view(), MockInit._mapOptions(), [4,8,12,16], VoyageX.TILE_HANDLER
-    window.VoyageX.TILE_HANDLER = new L.TileLayer.Functional(MockInit.drawTile, {
-            subdomains: ['a']
-          })
+      APP._init MockInit._mapOptions(), [4,8,12,16], VoyageX.TILE_HANDLER
 
   out: (message) ->
     $('#test_out').append('\n<m>'+message+'</m>')

@@ -9,16 +9,15 @@ feature "edit event presale", js: true do
       @user = user
       sign_in @user.email, @user.password
       visit root_path
-      #binding.pry
       expect(page).to have_selector '#map'
-      expect(page.body).to match /<div id="test_out">/
-      expect(page.body).to match /<div id="test_out">.*<m>Comm[^<]*<\/m>/
-      expect(page.body).to match /<div id="test_out">.*<m>FayeClientMock[^<]*<\/m>/
-      expect(page.body).to match /<div id="test_out">.*<m>MockInit-drawTile:[^<]*<\/m>/
-      expect(page.body).to match /<div id="test_out">BANG<\/m>/
-      #expect(page.body).to match /<div id="test_out">.*;Main-_init:2/
-      #find(/<div id="test_out">.*;Main-_init:2/)
-      #wait_until { find("#test_out").text.should match /.*;Main-_init:2/ }
+      test_out_match = page.body.match /<div id="test_out">.*<\/div>/m
+      expect(test_out_match).to be_present
+      test_out = test_out_match[0]
+      #puts "test_out = #{test_out}"
+      expect(test_out).to match /<m>Comm[^<]*<\/m>/m
+      expect(test_out).to match /<m>FayeClientMock[^<]*<\/m>/m
+      expect(test_out).to match /<m>MockInit-drawTile:[^<]*<\/m>/m
+      expect(test_out).to match /<m>APP._initState = 3<\/m>/m
     end
   end
 

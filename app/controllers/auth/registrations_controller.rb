@@ -16,7 +16,8 @@ module Auth
       end
       @user = User.new(user_params.merge!({search_radius_meters: 1000,
                                            foto: UserHelper::fetch_random_avatar(request),
-                                           snapshot: UserSnapshot.new(location: Location.default, cur_commit: Commit.latest)})) unless @user.present?
+                                           snapshot: UserSnapshot.new(location: Location.default, cur_commit: Commit.latest),
+                                           comm_port: CommPort.new(channel_enc_key: CommPort.enc_key, sys_channel_enc_key: CommPort.enc_key)})) unless @user.present?
       if @user.save
         # user has to confirm email-address first, so no sign_in @user
         #redirect_to root_path(exec: 'show_login_dialog_confirm_email')

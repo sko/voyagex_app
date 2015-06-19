@@ -43,16 +43,6 @@ class ApplicationController < ActionController::Base
     end
   end
 
-#  def registered_user?
-#    tmp_user.last_sign_in_ip.present?
-#  end
-
-#protected
-#  # @see skip_before_action
-#  def json_request?
-#    request.format.json?
-#  end
-
 private
 
   #
