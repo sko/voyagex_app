@@ -71,6 +71,9 @@ class window.VoyageX.ChatControl
 
   _talkCB: (message) ->
     peer = APP.storage().getUser parseInt(message.userId)
+    unless peer.isPeer()
+      console.log "CHAT - _talkCB: received message from user "+peer.username+" i don't follow ..."
+      return false
     APP.model().chatMessageReceived message.chat_message_id, peer
     APP.storage().addChatMessage message.text, peer, if message.type == 'p2p-message' then peer else null
     delete message.userId

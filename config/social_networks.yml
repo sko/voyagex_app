@@ -1,16 +1,12 @@
 production:
   facebook:
-    key: "674280899350070"                       # voyagex.info.tm
-    secret: "8e16f4cc6ae9749f08b45601bb4bbe8b"
-#    key: "663353313797273"                       # voyagex-local.info.tm:8080
-#    secret: "fce020bdf1f5ea03577a710bb2f69707"
+    key: "663353313797273"                       # voyagex-local.info.tm:8080
+    secret: "fce020bdf1f5ea03577a710bb2f69707"
 
 staging:
   facebook:
-    key: "674280899350070"                       # voyagex.info.tm
-    secret: "8e16f4cc6ae9749f08b45601bb4bbe8b"
-#    key: "663353313797273"                       # voyagex-local.info.tm:8080
-#    secret: "fce020bdf1f5ea03577a710bb2f69707"
+    key: "663353313797273"                       # voyagex-local.info.tm:8080
+    secret: "fce020bdf1f5ea03577a710bb2f69707"
 
 development:
   facebook:

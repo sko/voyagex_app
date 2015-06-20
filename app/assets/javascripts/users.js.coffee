@@ -183,8 +183,6 @@ class window.VoyageX.Users
         channelPath += VoyageX.PEER_CHANNEL_PREFIX+peer.peerPort.channel_enc_key
       Comm.Comm.subscribeTo channelPath, Comm.Comm.channelCallBacksJSON[channel].callback
 
-  #unsubscribePeerChannel: (peer) ->
-
   unsubscribeFromPeerChannels: (peer) ->
     for channel in VoyageX.Main.commChannels()
       if channel == 'system'

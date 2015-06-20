@@ -572,6 +572,7 @@ class window.VoyageX.Main
         USERS.checkDistance peer, {lat: peerLL.lat, lng: peerLL.lng}, (peer, inRange) ->
             if inRange
               APP.view().systemMessage VoyageX.TemplateHelper.peerInRangeHtml(peer)
+            false
     if showSearchRadius
       Main.markerManager().searchBounds APP.user().searchRadiusMeters, APP.map()
 
@@ -627,6 +628,7 @@ class window.VoyageX.Main
         USERS.checkDistance peer, {lat: peerLL.lat, lng: peerLL.lng}, (peer, inRange) ->
             if inRange
               APP.view().systemMessage VoyageX.TemplateHelper.peerInRangeHtml(peer)
+            false
     APP.watchRealPosition()
 
   stopRealPositionWatch: () ->
@@ -754,6 +756,8 @@ class window.VoyageX.Main
     else if message.type == 'subscription_denied'
     else if message.type == 'subscription_grant_revoked'
       #message.peer.peerPort = {channel_enc_key: message.peer.peerPort.channel_enc_key}
+      message.peer['peerPort'] = {channel_enc_key: message.peer.channel_enc_key}
+      delete message.peer.channel_enc_key
       USERS.removePeer message.peer
     else if message.type == 'quit_subscription'
       true # do nothing
@@ -879,6 +883,7 @@ class window.VoyageX.Main
               notifyChange ||= true
               Storage.Model.instance().syncWithStorage modPoi, newNote, (poi, newNotes) ->
                   console.log 'added new poi '+poi.id+' with #'+newNotes.length+' notes'
+                  Main.markerManager().add poi.getLocation(), Main._markerEventsCB
           if notifyChange
             console.log 'TODO: notify change after  pull ...'
             APP.view().alert()

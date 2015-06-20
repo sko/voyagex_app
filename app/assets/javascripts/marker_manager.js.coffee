@@ -108,7 +108,7 @@ class window.VoyageX.MarkerManager
     @_selectedMarker.target()
 
   get: (meta = false) ->
-    if @_selectedMarker != null then (if meta then @_selectedMarker else @_selectedMarker.target()) else null
+    if @_selectedMarker != null then (if meta then MarkerManager.metaJSON(@_selectedMarker, {poi: null, peer: null}) else @_selectedMarker.target()) else null
 
   meta: (leafletMarker) ->
     for m in @_markers
@@ -144,7 +144,7 @@ class window.VoyageX.MarkerManager
 
   removeForPoi: (poiId) ->
     for m, idx in @_markers
-      if m.location().poiId == poiId
+      if m.isPoiMarker() && m.location().poiId == poiId
         this._removeAt idx
         break
 

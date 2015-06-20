@@ -97,20 +97,18 @@ class window.VoyageX.View
         else
           oPM = APP.getOpenPopupMarker(true)
           if oPM?
-            if oPM.m.isPeerMarker() && (oPM.m._flags.peer.id == message.peer.id)
-              if VIEW_MODEL.currentView().key == 'map'
-                View.addChatMessage message, false, {peer: message.peer}
-              else
-                window.stopSound = VoyageX.MediaManager.instance().playSound(VoyageX.SOUNDS_MSG_IN_PATH)
-                GUI.showSystemMessage (systemMessageDiv) ->
-                    systemMessageDiv.html $('#tmpl_p2p_message_received_popup').html().
-                                          replace(/\{peerId\}/, message.peer.id).
-                                          replace(/\{peerUsername\}/, message.peer.username)
-                  , null, 'popup'
+            if oPM.m.isPeerMarker() && (oPM.m._flags.peer.id == message.peer.id) && (VIEW_MODEL.currentView().key == 'map')
+              View.addChatMessage message, false, {peer: message.peer}
+            else
+              window.stopSound = VoyageX.MediaManager.instance().playSound(VoyageX.SOUNDS_MSG_IN_PATH)
+              GUI.showSystemMessage (systemMessageDiv) ->
+                  systemMessageDiv.html $('#tmpl_p2p_message_received_popup').html().
+                                        replace(/\{peerId\}/, message.peer.id).
+                                        replace(/\{peerUsername\}/, message.peer.username)
+                , null, 'popup'
           else
             VoyageX.TemplateHelper.openPeerPopup message.peer, APP.markers().forPeer(message.peer.id).target()
             VoyageX.TemplateHelper.openP2PChat message.peer
-            View.addChatMessage message, false, {peer: message.peer}
     for listener in View.instance()._commListeners.talk
       listener(message)
 

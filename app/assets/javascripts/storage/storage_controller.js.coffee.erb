@@ -746,7 +746,7 @@ class window.Comm.StorageController
     Comm.FileUtils._FS?
     #false
 
-  clearCache: (flags = {tiles: true, poiNotes: null, users: null}) ->
+  clearCache: (flags = {tiles: true, poiNotes: null, users: null, keepCurrentUser: null}) ->
     #this.delete('tiles')
     if StorageController.isFileBased()
       # for dirName in VoyageX.MapControl.instance()._offlineZooms
@@ -754,13 +754,22 @@ class window.Comm.StorageController
       # this._removeDirectory 'poiNotes'
       # this._removeDirectory 'users'
       Comm.FileUtils.instance().clearCache(flags)
+    if flags.keepCurrentUser? && flags.keepCurrentUser
+      bookmarks = this.bookmarks()
     for key, i in Object.keys(localStorage)
       if (key.match(/\.poi\./)? || key.match(/\.locations$/)?) && (!(flags.poiNotes?&&flags.poiNotes))
         continue
       if key.match(/\.(users|currentUser)$/)? && (!(flags.users?&&flags.users))
         continue
+      if key.match(/\.currentUser$/)? && flags.keepCurrentUser? && flags.keepCurrentUser
+        continue
       console.log('StorageController - clearCache: deleting \''+key+'\' ...')
       this.delete(key)
+    if bookmarks?
+      for bookmark in bookmarks
+        delete bookmark.location.poi
+        this.saveLocation bookmark.location
+        this.bookmark bookmark.location.id, if bookmark.text? then bookmark.text else '...'
 
   loadAndPrefetchTile: (prefetchParams) ->
     Comm.FileUtils.instance().loadAndPrefetchTile prefetchParams
