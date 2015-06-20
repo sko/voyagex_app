@@ -41,7 +41,7 @@
           %li
             %button{class: 'activate_map', value: 'map', 'data-icon' => 'location', 'data-iconpos' => 'top'}
           %li
-            %button{class: 'activate_upload', value: 'upload', 'data-icon' => 'home', 'data-iconpos' => 'top'}
+            %button{class: 'activate_home', value: 'upload', 'data-icon' => 'home', 'data-iconpos' => 'top'}
     .auth{style: 'display:none;'}
       = render partial: '/auth/sign_in.mobile', locals: {resource: User.new, resource_name: :user}
       = render partial: '/auth/sign_up.mobile', locals: {resource: User.new, resource_name: :user}

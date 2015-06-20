@@ -64,5 +64,5 @@ end
 ADMIN_EMAIL_ADDRESS = 'sko@ctrl.info.tm'
 PEER_CHANNEL_PREFIX = '@'
 USE_GLOBAL_SUBSCRIBE = false
-SOCIAL_NETS_CONFIG = YAML.load(File.read("#{Rails.root}/config/social_networks.yml"))["social_networks"].
+SOCIAL_NETS_CONFIG = YAML.load(File.read("#{Rails.root}/config/social_networks.yml"))[Rails.env].
                      deep_symbolize_keys

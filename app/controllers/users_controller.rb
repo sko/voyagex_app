@@ -1,5 +1,4 @@
 class UsersController < ApplicationController 
-  include GeoUtils
   include ApplicationHelper
   include PoiHelper
   include UserHelper

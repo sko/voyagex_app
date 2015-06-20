@@ -19,9 +19,11 @@ class window.VoyageX.Gui
       GUI.closeSystemMessage()
       $('#fullscreen_mode_icon_on').show()
       $('#fullscreen_mode_icon_off').hide()
+    $(document).on 'click', '.activate_chat', (event) ->
+      VIEW_MODEL.menuNavClick('chat')
     $(document).on 'click', '.activate_map', (event) ->
       VIEW_MODEL.menuNavClick('map')
-    $(document).on 'click', '.activate_upload', (event) ->
+    $(document).on 'click', '.activate_home', (event) ->
       VIEW_MODEL.menuNavClick('home')
     $("#system_message_popup").on 'popupafterclose', (event, ui) ->
         if window.stopSound?
@@ -56,13 +58,14 @@ class window.VoyageX.Gui
       colors = {active: 'd91b00', inactive: '980a00'}
    #$('#menu_top button').not(':focus').css('background-color', '#'+colors.inactive)
     $('#menu_top button').css('background-color', '#'+colors.inactive)
+    $('#menu_top button').removeClass('focusedMenuItem')
     unless activeSelector?
-      activeSelector = $('#menu_top button:focus')
+      activeSelector = $('#menu_top button[class~=activeView]')
     activeSelector.css('background-color', '#'+colors.active)
 
   showView: (view) ->
-    #$('#activate_'+view.key).focus()
-    this.showActiveState()
+    $('.activate_'+view.key).first().addClass('activeView')
+    this.showActiveState $('.activate_'+view.key).first()
     $('#content_'+view.key).css('display', 'block')
     if view.key == 'map'
       if MC?

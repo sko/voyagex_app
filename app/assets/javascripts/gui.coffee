@@ -110,6 +110,7 @@ class window.VoyageX.Gui
     $('#network_state_view').css('background-color', '#'+color)
 
   showView: (view) ->
+    #this.showActiveState()
     if !$('#menu_'+view.key).hasClass('active')
       $('#menu_'+view.key).addClass('active')
     $('#content_'+view.key).css('display', 'block')

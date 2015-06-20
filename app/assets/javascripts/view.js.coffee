@@ -78,7 +78,8 @@ class window.VoyageX.View
       when 'message'
         if $('.chat_view').children().length == 0
           CHAT.initBCChatMessages()
-        View.addChatMessage message, false
+        else
+          View.addChatMessage message, false
         unless VIEW_MODEL.currentView().key == 'chat'
           window.stopSound = VoyageX.MediaManager.instance().playSound(VoyageX.SOUNDS_MSG_IN_PATH)
           GUI.showSystemMessage (systemMessageDiv) ->

@@ -10,10 +10,14 @@ module UserHelper
   def user_json user
     last_loc = last_location user
     last_loc_poi = last_loc.persisted? ? Poi.where(location: last_loc).first : nearby_pois(last_loc, 10).first
-    geometry = Paperclip::Geometry.from_file(user.foto) if user.foto.present?
-    foto_width = geometry.present? ? geometry.width.to_i : -1
-    foto_height = geometry.present? ? geometry.height.to_i : -1
-
+    begin
+      geometry = Paperclip::Geometry.from_file(user.foto) if user.foto.present?
+      foto_width = geometry.present? ? geometry.width.to_i : -1
+      foto_height = geometry.present? ? geometry.height.to_i : -1
+    rescue => e
+      foto_width = -1
+      foto_height = -1
+    end
     json = { id: user.id,
              username: user.username,
              lastLocation: {

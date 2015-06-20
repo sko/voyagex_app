@@ -1,5 +1,5 @@
 module PoiHelper
-  include ApplicationHelper
+  include ::GeoUtils
 
   def add_attachment_to_poi_note_json upload, poi_note_json
     if upload.entity.is_a? UploadEntity::Mediafile

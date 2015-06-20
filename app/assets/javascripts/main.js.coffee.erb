@@ -175,7 +175,8 @@ class window.VoyageX.Main
 #          $( "#panel_control" ).on( "dragcreate", (event, ui) ->
 #                  console.log('dragging ...')
 #            )
-          GUI.showActiveState($('#menu_top button.activate_map'))
+          #GUI.showActiveState($('#menu_top button.activate_map'))
+          GUI.showActiveState()
         else
           GUI.showActiveState()
         $('#zoom_level').html('<span style="color:white;">zoom: '+APP.map().getZoom()+'</span>')

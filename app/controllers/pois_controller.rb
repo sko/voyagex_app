@@ -1,5 +1,4 @@
 class PoisController < ApplicationController 
-  include GeoUtils
   include ApplicationHelper
   include PoiHelper
 

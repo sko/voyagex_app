@@ -1,6 +1,28 @@
 module ::GeoUtils
   extend ActiveSupport::Concern
 
+  #
+  def shorten_address location, lookup = false
+    if location.address.present?
+      parts = location.address.split(',')
+      if parts.size >= 3
+        parts.drop([parts.size - 2, 2].min).join(',').strip
+      else
+        location.address
+      end
+    else
+      unless location.persisted?
+        if lookup
+          geo = Geocoder.search([location.latitude, location.longitude])
+          address = geo[0].address
+          parts = address.split(',')
+          return parts.drop([parts.size - 2, 2].min).join(',').strip if parts.size >= 3
+        end
+      end
+      "#{location.latitude}-#{location.longitude}"
+    end
+  end
+
   # http://www.csgnetwork.com/degreelenllavcalc.html
   def lat_lng_limits lat, lng, radius_meters
     latRAD = lat/180 * Math::PI
