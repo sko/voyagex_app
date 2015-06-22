@@ -2,9 +2,14 @@ $('#settings_form').attr('action', '<%= user_path id: tmp_user.id -%>')
 # you are always someone
 <%
 l_l = tmp_user.last_location true
-geometry = Paperclip::Geometry.from_file(tmp_user.foto)
-foto_width = geometry.present? ? geometry.width.to_i : -1
-foto_height = geometry.present? ? geometry.height.to_i : -1
+begin
+  geometry = Paperclip::Geometry.from_file(tmp_user.foto)
+  foto_width = geometry.present? ? geometry.width.to_i : -1
+  foto_height = geometry.present? ? geometry.height.to_i : -1
+rescue => e
+  foto_width = -1
+  foto_height = -1
+end
 %>
 # unsubscribe from peers
 peers = APP.storage().getPeers()

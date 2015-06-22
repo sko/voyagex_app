@@ -130,13 +130,15 @@ class User < ActiveRecord::Base
   def self.rand_user
     dummy_username = (0..6).map { MIXED[rand(MIXED.length)] }.join
     dummy_password = (0..8).map { MIXED[rand(MIXED.length)] }.join
+    foto = UserHelper::fetch_random_avatar
+    foto = File.open("#{Rails.root}/spec/support/images/foto.png", 'r') unless foto.present?
     u = User.create(username: dummy_username,
                     password: dummy_password,
                     password_confirmation: dummy_password,
                     email: ADMIN_EMAIL_ADDRESS.sub(/^[^@]+/, dummy_username),
                     search_radius_meters: 1000,
                     snapshot: UserSnapshot.new(location: Location.default, cur_commit: Commit.latest),
-                    foto: UserHelper::fetch_random_avatar,
+                    foto: foto,
                     comm_port: CommPort.new(channel_enc_key: CommPort.enc_key, sys_channel_enc_key: CommPort.enc_key)
                    )
   end

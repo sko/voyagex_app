@@ -287,7 +287,7 @@ data
     end
     `git #{vm.git_args} add -A`
     `git #{vm.git_args} commit -m 'commit before changing branch'`
-    `git #{vm.git_args} push`
+    `git #{vm.git_args} push origin #{@master}`
   end
 
 end

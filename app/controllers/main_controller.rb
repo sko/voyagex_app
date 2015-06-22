@@ -14,7 +14,11 @@ class MainController < ApplicationController
 
   def index
     @initial_subscribe = true
-    tmp_user.update_attribute(:foto, UserHelper::fetch_random_avatar(request)) unless tmp_user.foto.exists?
+    unless tmp_user.foto.exists?
+      foto = UserHelper::fetch_random_avatar request
+      foto = File.open("#{Rails.root}/spec/support/images/foto.png", 'r') unless foto.present?
+      tmp_user.update_attribute(:foto, foto) 
+    end
     if signed_in? # registered_user?
       unless tmp_user.snapshot.cur_commit.present?
         vm = VersionManager.new Poi::MASTER, Poi::WORK_DIR_ROOT, tmp_user, false#user.is_admin?

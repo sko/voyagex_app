@@ -14,8 +14,10 @@ module Auth
           # email-change will trigger @user.send_confirmation_instructions
         end
       end
+      foto = UserHelper::fetch_random_avatar request
+      foto = File.open("#{Rails.root}/spec/support/images/foto.png", 'r') unless foto.present?
       @user = User.new(user_params.merge!({search_radius_meters: 1000,
-                                           foto: UserHelper::fetch_random_avatar(request),
+                                           foto: foto,
                                            snapshot: UserSnapshot.new(location: Location.default, cur_commit: Commit.latest),
                                            comm_port: CommPort.new(channel_enc_key: CommPort.enc_key, sys_channel_enc_key: CommPort.enc_key)})) unless @user.present?
       if @user.save

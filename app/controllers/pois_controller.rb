@@ -161,7 +161,7 @@ class PoisController < ApplicationController
 
   # @see skip_before_action
   def current_user_required?
-    [:pull_pois, :sync_poi, :destroy, :pois, :comments].include? action_name.to_sym
+    [:pull_pois, :sync_pois, :destroy, :pois, :comments].include? action_name.to_sym
   end
 
 end
