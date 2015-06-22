@@ -44,7 +44,7 @@ git branch
 git remote set-url origin github:sko/voyagex_app
 git status
 git add -u
-git commit -m "cleanups and fixes IV"
+git commit -m "cleanups and fixes VI"
 git push origin master
 
 

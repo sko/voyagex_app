@@ -1,7 +1,6 @@
 #require 'faye'
 class PostCommit
   include PoiHelper
-  include PoiHelper
 
   LOGGER = Logger.new("#{Rails.root}/log/post_commit.log")
 

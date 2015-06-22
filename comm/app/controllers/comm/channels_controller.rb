@@ -120,14 +120,22 @@ module Comm
                     publish_data['locationId'] = location.id
                   else
                     geo = Geocoder.search([publish_data['lat'], publish_data['lng']])
-                    address = geo[0].address
-                    parts = address.split(',')
-                    if parts.size >= 3
-                      address = parts.drop([parts.size - 2, 2].min).join(',').strip
+                    if geo.present? && geo[0].present?
+                      address = geo[0].address
+                      parts = address.split(',')
+                      if parts.size >= 3
+                        if [:google].include? Geocoder.config[:lookup]
+                          address = parts.reverse.drop([parts.size - 2, 2].min).join(',').strip
+                        else
+                          address = parts.drop([parts.size - 2, 2].min).join(',').strip
+                        end
+                      end
+                      LOGGER.debug "<<< providing reverse-geocoding-service: #{address}"
+                      publish_data['address'] = address
+                    else
+                      LOGGER.warn "<<< no address found for #{publish_data['lat']} / #{publish_data['lng']}"
                     end
                   end
-                  LOGGER.debug "<<< providing reverse-geocoding-service: #{address}"
-                  publish_data['address'] = address
                 rescue => e
                   LOGGER.error "!!!!!! map_events - filter-out: [click] #{e.message}"
                 end

@@ -1,6 +1,8 @@
 Geocoder.configure(
   # Use FreeGeoIp as lookup provider
-  :lookup => :yandex,
+  #:lookup => :yandex,
+  #:lookup => :freegeoip,
+  :lookup => :google,
 
   # Default unit is kilometers
   :units => :km,

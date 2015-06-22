@@ -2,7 +2,7 @@ require 'resque/server'
 
 # This will make the scheduler-tabs show up.
 require 'resque/scheduler'
-require 'resque/server'
+#require 'resque/server'
 
 #Dir["#{Rails.root}/app/jobs/*.rb"].each { |file| require file }
 
@@ -16,4 +16,4 @@ uri = URI.parse(ENV["REDIS_URL"])
 Resque.redis = Redis.new(:host => uri.host, :port => uri.port, :password => uri.password, :thread_safe => true)
 
 # http://stackoverflow.com/questions/9961044/postgres-error-on-heroku-with-resque
-Resque.after_fork = Proc.new { ActiveRecord::Base.establish_connection }
+#Resque.after_fork = Proc.new { ActiveRecord::Base.establish_connection }

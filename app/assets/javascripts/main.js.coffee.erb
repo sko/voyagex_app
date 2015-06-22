@@ -192,9 +192,9 @@ class window.VoyageX.Main
         $('#clear_cache').click () ->
           APP.clearCache()
         if document.location.hash?
-          context = document.location.hash.match(/[^#]+/)
-          if context? && context.length >= 1
-            viewKey = document.location.hash.match(/[^#]+/)[0]
+          context = document.location.hash.match(/#?([a-z]+)/)
+          if context? && context.length >= 2
+            viewKey = document.location.hash.match(/#?([a-z]+)/)[1]
             if viewKey == 'conference'
               viewKey = 'chat'
             VIEW_MODEL.menuNavClick viewKey
